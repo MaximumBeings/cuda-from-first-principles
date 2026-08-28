@@ -36,7 +36,14 @@ An army doesn't get its orders individually, soldier by soldier — it's organiz
 
 ### Worked Example 4.1.1 — every global ID, computed by hand and confirmed by a genuine run
 
-For a 1D launch `<<<3, 4>>>` (3 blocks of 4 threads each, 12 threads total), block 0's four threads compute `i = 0*4+0=0`, `0*4+1=1`, `0*4+2=2`, `0*4+3=3`; block 1's compute `i = 1*4+0=4` through `1*4+3=7`; block 2's compute `i = 2*4+0=8` through `2*4+3=11`. Genuinely compiled and run — a host-side loop enumerating every `(blockIdx.x, threadIdx.x)` pair a real launch would create, applying the identical formula every thread would execute:
+For a 1D launch `<<<3, 4>>>` (3 blocks of 4 threads each, 12 threads total), block 0's four threads compute `i = 0*4+0=0`, `0*4+1=1`, `0*4+2=2`, `0*4+3=3`; block 1's compute `i = 1*4+0=4` through `1*4+3=7`; block 2's compute `i = 2*4+0=8` through `2*4+3=11`. Compiled and run as the complete `01_thread_hierarchy.cu` further below, whose `main()` is a host-side loop enumerating every `(blockIdx.x, threadIdx.x)` pair a real launch would create, applying the identical formula every thread would execute:
+
+```bash
+nvcc -arch=sm_80 01_thread_hierarchy.cu -o 01_thread_hierarchy
+./01_thread_hierarchy
+```
+
+Genuinely compiled and run:
 
 ```
 1D launch: <<<3, 4>>> -- 12 total threads
@@ -46,7 +53,7 @@ For a 1D launch `<<<3, 4>>>` (3 blocks of 4 threads each, 12 threads total), blo
   block 2, thread 3 -> global i = 11
 ```
 
-For a 2D launch `<<<dim3(2,2), dim3(2,2)>>>` — 2×2 blocks of 2×2 threads, a 4×4 grid of outputs — `row = blockIdx.y*blockDim.y+threadIdx.y` and `col = blockIdx.x*blockDim.x+threadIdx.x` independently. Genuinely computed and confirmed for all 16 threads:
+For a 2D launch `<<<dim3(2,2), dim3(2,2)>>>` — 2×2 blocks of 2×2 threads, a 4×4 grid of outputs — `row = blockIdx.y*blockDim.y+threadIdx.y` and `col = blockIdx.x*blockDim.x+threadIdx.x` independently. Continuing the same `01_thread_hierarchy.cu` run above (its `main()` prints the 1D trace first, then this 2D trace), genuinely computed and confirmed for all 16 threads:
 
 ```
 2D launch: <<<(2,2), (2,2)>>> -- 4x4 = 16 total threads
@@ -125,6 +132,13 @@ int main() {
     cudaFree(d_a); cudaFree(d_b); cudaFree(d_c);
     return 0;
 }
+```
+
+Compiled and run as the complete `02_vector_add_h2d_d2h.cu` further below:
+
+```bash
+nvcc -arch=sm_80 02_vector_add_h2d_d2h.cu -o 02_vector_add_h2d_d2h
+./02_vector_add_h2d_d2h
 ```
 
 Genuinely compiled and run, with every return code checked:
@@ -219,7 +233,12 @@ __global__ void naive_matmul_kernel(const float* A, const float* B, float* C, in
 }
 ```
 
-For `A = [[1,2],[3,4]]`, `B = [[5,6],[7,8]]`: thread `(0,0)` computes `C[0][0] = A[0][0]*B[0][0] + A[0][1]*B[1][0] = 1*5 + 2*7 = 5+14 = 19`. Thread `(0,1)` computes `C[0][1] = 1*6 + 2*8 = 6+16 = 22`. Thread `(1,0)` computes `C[1][0] = 3*5+4*7 = 15+28 = 43`. Thread `(1,1)` computes `C[1][1] = 3*6+4*8 = 18+32 = 50`. Genuinely compiled (the kernel compiles clean for `sm_80`) and genuinely run on the host via an identical reference implementation:
+For `A = [[1,2],[3,4]]`, `B = [[5,6],[7,8]]`: thread `(0,0)` computes `C[0][0] = A[0][0]*B[0][0] + A[0][1]*B[1][0] = 1*5 + 2*7 = 5+14 = 19`. Thread `(0,1)` computes `C[0][1] = 1*6 + 2*8 = 6+16 = 22`. Thread `(1,0)` computes `C[1][0] = 3*5+4*7 = 15+28 = 43`. Thread `(1,1)` computes `C[1][1] = 3*6+4*8 = 18+32 = 50`. Genuinely compiled (the kernel compiles clean for `sm_80`) and genuinely run on the host via an identical reference implementation, as the complete `03_naive_matmul.cu` further below:
+
+```bash
+nvcc -arch=sm_80 03_naive_matmul.cu -o 03_naive_matmul
+./03_naive_matmul
+```
 
 ```
 host reference C = [[19.0, 22.0], [43.0, 50.0]]
@@ -256,6 +275,13 @@ int main() {
     return 0;
 }
 ```
+
+```bash
+nvcc -arch=sm_80 01_thread_hierarchy.cu -o 01_thread_hierarchy
+./01_thread_hierarchy
+```
+
+Produces exactly the two output blocks shown in Worked Example 4.1.1 above, the 1D trace followed by the 2D trace.
 
 ### File: `02_vector_add_h2d_d2h.cu`
 
@@ -308,6 +334,13 @@ int main() {
 }
 ```
 
+```bash
+nvcc -arch=sm_80 02_vector_add_h2d_d2h.cu -o 02_vector_add_h2d_d2h
+./02_vector_add_h2d_d2h
+```
+
+Produces exactly the output shown in Worked Example 4.2.1 above.
+
 ### File: `03_naive_matmul.cu`
 
 ```cpp
@@ -344,6 +377,13 @@ int main() {
     return 0;
 }
 ```
+
+```bash
+nvcc -arch=sm_80 03_naive_matmul.cu -o 03_naive_matmul
+./03_naive_matmul
+```
+
+`naive_matmul_kernel` is compiled into this binary (proving it builds clean for `sm_80`) but, as `main()` above shows, only `matmul_host_reference` is actually called — the kernel itself is never launched here, exactly as the paragraph below explains.
 
 ### Expected Output for `03_naive_matmul.cu`
 

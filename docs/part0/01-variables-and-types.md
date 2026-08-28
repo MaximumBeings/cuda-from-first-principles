@@ -39,6 +39,8 @@ float y = 3.14159f;
 double z = 2.71828;
 ```
 
+*(This trio of declarations is shown here as an excerpt; the complete, compiled, and genuinely run version — wrapped in `#include`/`main`/`printf` — is `01_stack_types.cu` further below.)*
+
 The compiler reserves 4 bytes for `x` at some stack offset and writes the two's-complement bit pattern for `42`. It reserves another 4 bytes for `y` (a C++ `float` is IEEE-754 single precision) and writes the bit pattern for `3.14159`. It reserves 8 bytes for `z` (a `double` is IEEE-754 double precision) and writes the bit pattern for `2.71828`. None of this involves an object, a header, or a type tag riding along with the value — just raw bytes at fixed offsets, and a compiler that remembers, in its own bookkeeping (the symbol table), which offset means which type. By the time the program runs, the type has already done its job and vanished.
 
 ### ASCII Diagram — one stack frame, three variables
@@ -88,6 +90,13 @@ auto b = 5.5;     // compiler infers double here -- permanent
 auto c = true;    // compiler infers bool here -- permanent
 ```
 
+Compiled and run as `02_auto_inference.cu` (the complete file, with its `#include`/`main`/`printf` wrapper, appears further below):
+
+```bash
+nvcc -arch=sm_80 02_auto_inference.cu -o 02_auto_inference
+./02_auto_inference
+```
+
 Genuinely compiled and run on the host (no GPU involved — this is ordinary C++):
 
 ```
@@ -128,6 +137,10 @@ int main() {
     cudaDeviceSynchronize();
     return 0;
 }
+```
+
+```bash
+nvcc -arch=sm_80 --keep hello.cu -o hello
 ```
 
 Compiled with `nvcc -arch=sm_80 --keep hello.cu`, this single file genuinely produces, among other intermediate files: `hello.ptx` (the device intermediate representation), `hello.sm_80.cubin` (real sm_80 machine code), `hello.fatbin` (both packaged together), and `hello.cudafe1.stub.c` (the host-side stub). The stub file's actual, unedited content shows exactly what `hello_kernel<<<2, 4>>>()` expands into:
@@ -181,7 +194,12 @@ host = linux
 
 One `.cu` file. One `nvcc` invocation. Two genuinely different compiled artifacts — real x86-64 object code for `main`, real sm_80 PTX+SASS for `hello_kernel` — sitting inside the same `.o`/executable.
 
-> `[COMMON TRAP]` It's tempting to think a kernel launch like `hello_kernel<<<2, 4>>>()` is "just a function call with funny syntax," and therefore that it fails the way a bad function call fails — a crash, a hang. In this environment (no NVIDIA GPU present at all), running the compiled binary above does neither:
+> `[COMMON TRAP]` It's tempting to think a kernel launch like `hello_kernel<<<2, 4>>>()` is "just a function call with funny syntax," and therefore that it fails the way a bad function call fails — a crash, a hang. In this environment (no NVIDIA GPU present at all), running the compiled binary above does neither. The output below comes from `03_host_device_launch.cu` further down — the same `hello_kernel`, wrapped with explicit `cudaError_t` checks around each device-touching call:
+>
+> ```bash
+> nvcc -arch=sm_80 03_host_device_launch.cu -o 03_host_device_launch
+> ./03_host_device_launch
+> ```
 >
 > ```
 > cudaGetDeviceCount -> err=100 (no CUDA-capable device is detected), count=0
@@ -222,6 +240,10 @@ int main() {
 }
 ```
 
+```bash
+nvcc -arch=sm_80 -c err_check.cu -o err_check.o
+```
+
 Genuinely compiled with `nvcc -arch=sm_80 -c err_check.cu`:
 
 ```
@@ -253,6 +275,11 @@ int main() {
 }
 ```
 
+```bash
+nvcc -arch=sm_80 square_dual_compile.cu -o square_dual_compile
+./square_dual_compile
+```
+
 Genuinely compiled and run (the `main` call path touches no GPU state, so it runs to completion here):
 
 ```
@@ -273,6 +300,10 @@ host_result = 25.000000
 > ```
 >
 > Only forwarding a warning flag to the host compiler surfaces it — genuinely captured with `nvcc -arch=sm_80 -Xcompiler -Wconversion`:
+>
+> ```bash
+> nvcc -arch=sm_80 -Xcompiler -Wconversion -c narrow_check.cu -o narrow_check.o
+> ```
 >
 > ```
 > narrow_check.cu: In function 'int main()':
@@ -313,6 +344,11 @@ int main() {
 }
 ```
 
+```bash
+nvcc -arch=sm_80 vector_types.cu -o vector_types
+./vector_types
+```
+
 Genuinely compiled and run on the host (these are ordinary C++ struct types, usable and measurable without any GPU):
 
 ```
@@ -340,6 +376,11 @@ int main() {
 }
 ```
 
+```bash
+nvcc -arch=sm_80 01_stack_types.cu -o 01_stack_types
+./01_stack_types
+```
+
 ### File: `02_auto_inference.cu`
 
 ```cpp
@@ -353,6 +394,11 @@ int main() {
            a, sizeof(a), b, sizeof(b), c, sizeof(c));
     return 0;
 }
+```
+
+```bash
+nvcc -arch=sm_80 02_auto_inference.cu -o 02_auto_inference
+./02_auto_inference
 ```
 
 ### File: `03_host_device_launch.cu`
@@ -381,6 +427,11 @@ int main() {
 }
 ```
 
+```bash
+nvcc -arch=sm_80 03_host_device_launch.cu -o 03_host_device_launch
+./03_host_device_launch
+```
+
 ### File: `04_host_device_dual_compile.cu`
 
 ```cpp
@@ -405,6 +456,11 @@ int main() {
     printf("float4 fields: x=%f y=%f z=%f w=%f\n", v.x, v.y, v.z, v.w);
     return 0;
 }
+```
+
+```bash
+nvcc -arch=sm_80 04_host_device_dual_compile.cu -o 04_host_device_dual_compile
+./04_host_device_dual_compile
 ```
 
 ### Expected Output for `04_host_device_dual_compile.cu`

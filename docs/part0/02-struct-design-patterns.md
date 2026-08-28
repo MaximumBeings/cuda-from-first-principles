@@ -53,6 +53,13 @@ struct Point2D {
 };
 ```
 
+Compiled and run as the complete `01_basic_structs.cu` further below, which wraps this struct in a `main()` constructing `point1`/`point2`:
+
+```bash
+nvcc -arch=sm_80 01_basic_structs.cu -o 01_basic_structs
+./01_basic_structs
+```
+
 Genuinely compiled and run:
 
 ```
@@ -104,6 +111,13 @@ Point2D point2 = point1;      // copy constructor: point2.x=3.0, point2.y=4.0, i
 point2.x = 99.0f;             // mutating point2 does not touch point1
 ```
 
+Compiled and run as the same `01_basic_structs.cu` further below, whose `main()` continues past Worked Example 2.1.1's lines into exactly this copy-constructor trace:
+
+```bash
+nvcc -arch=sm_80 01_basic_structs.cu -o 01_basic_structs
+./01_basic_structs
+```
+
 Genuinely compiled and run:
 
 ```
@@ -146,6 +160,13 @@ Vector<float, 4> vf;   // vf.data[i] = {1.0f, 2.0f, 3.0f, 4.0f}
 Vector<int, 3> vi;     // vi.data[i] = {10, 20, 30}
 ```
 
+Compiled and run as the complete `02_templates.cu` further below:
+
+```bash
+nvcc -arch=sm_80 02_templates.cu -o 02_templates
+./02_templates
+```
+
 Genuinely compiled and run:
 
 ```
@@ -154,6 +175,10 @@ sizeof(Vector<int,3>)   = 12, sum = 60
 ```
 
 `Vector<float,4>` is 16 bytes (four 4-byte `float`s) and its sum is `1+2+3+4 = 10.0`. `Vector<int,3>` is 12 bytes (three 4-byte `int`s) and its sum is `10+20+30 = 60`. These aren't two runs of the same code with different data — `nm` (a real symbol-table dump of the compiled binary) genuinely shows two entirely separate compiled functions, at two different addresses, one per instantiation:
+
+```bash
+nm -C 02_templates | grep "Vector<"
+```
 
 ```
 000000000000ad92 W Vector<float, 4>::sum() const
@@ -200,6 +225,13 @@ void scoped_demo() {
     DeviceBuffer b(200);
     printf("both buffers constructed, about to leave scope\n");
 }
+```
+
+Compiled and run as the complete `03_raii_device_memory.cu` further below:
+
+```bash
+nvcc -arch=sm_80 03_raii_device_memory.cu -o 03_raii_device_memory
+./03_raii_device_memory
 ```
 
 Genuinely compiled and run:
@@ -252,7 +284,17 @@ __global__ void compute_area_kernel(Shape* s, float* out) {
 }
 ```
 
-This genuinely compiles clean under `nvcc -arch=sm_80` — device code is fully allowed to call a virtual function. The host-side call, genuinely run:
+This genuinely compiles clean under `nvcc -arch=sm_80` — device code is fully allowed to call a virtual function:
+
+```bash
+nvcc -arch=sm_80 virtual_dispatch.cu -o virtual_dispatch
+```
+
+The host-side call, genuinely run (`compute_area_kernel` above is compiled into the binary but, for the reason explained next, is deliberately never launched):
+
+```bash
+./virtual_dispatch
+```
 
 ```
 host-side virtual call: c.area() = 12.566360
@@ -286,6 +328,13 @@ template <typename ShapeT>
 __host__ __device__ float print_area_generic(const ShapeT& s) {
     return s.area();
 }
+```
+
+Compiled and run as the complete `04_crtp_interface.cu` further below:
+
+```bash
+nvcc -arch=sm_80 04_crtp_interface.cu -o 04_crtp_interface
+./04_crtp_interface
 ```
 
 Genuinely compiled and run:
@@ -340,6 +389,13 @@ int main() {
 }
 ```
 
+```bash
+nvcc -arch=sm_80 01_basic_structs.cu -o 01_basic_structs
+./01_basic_structs
+```
+
+Produces exactly the two output blocks shown in Worked Examples 2.1.1 and 2.2.1 above, concatenated in the order `main()` prints them.
+
 ### File: `02_templates.cu`
 
 ```cpp
@@ -368,6 +424,14 @@ int main() {
     return 0;
 }
 ```
+
+```bash
+nvcc -arch=sm_80 02_templates.cu -o 02_templates
+./02_templates
+nm -C 02_templates | grep "Vector<"
+```
+
+Produces the output shown in Worked Example 2.3.1 above, including the two distinct `nm`-reported symbol addresses.
 
 ### File: `03_raii_device_memory.cu`
 
@@ -402,6 +466,13 @@ int main() {
     return 0;
 }
 ```
+
+```bash
+nvcc -arch=sm_80 03_raii_device_memory.cu -o 03_raii_device_memory
+./03_raii_device_memory
+```
+
+Produces exactly the output shown in Worked Example 2.4.1 above.
 
 ### File: `04_crtp_interface.cu`
 
@@ -440,6 +511,11 @@ int main() {
     printf("square area (via CRTP, resolved at compile time) = %f\n", print_area_generic(sq));
     return 0;
 }
+```
+
+```bash
+nvcc -arch=sm_80 04_crtp_interface.cu -o 04_crtp_interface
+./04_crtp_interface
 ```
 
 ### Expected Output for `04_crtp_interface.cu`

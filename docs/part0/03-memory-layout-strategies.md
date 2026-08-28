@@ -42,6 +42,13 @@ struct Particle {
 };                       // total size: 28 bytes
 ```
 
+Compiled and run as the complete `01_bus_utilization.cu` further below:
+
+```bash
+nvcc -arch=sm_80 01_bus_utilization.cu -o 01_bus_utilization
+./01_bus_utilization
+```
+
 Genuinely compiled and run:
 
 ```
@@ -135,7 +142,14 @@ __global__ void kinetic_energy_aos_kernel(Particle* particles, float* out, int n
 }
 ```
 
-Both kernels genuinely compile clean for `sm_80`. Disassembling with `cuobjdump --dump-sass` (no GPU needed — this is static disassembly of the already-compiled machine code) shows exactly how each kernel computes a thread's address, unedited:
+Both kernels genuinely compile clean for `sm_80`. Compiled and disassembled as the complete `03_coalescing_kernels.cu` further below:
+
+```bash
+nvcc -arch=sm_80 -cubin 03_coalescing_kernels.cu -o 03_coalescing_kernels.cubin
+cuobjdump --dump-sass 03_coalescing_kernels.cubin
+```
+
+Disassembling with `cuobjdump --dump-sass` (no GPU needed — this is static disassembly of the already-compiled machine code) shows exactly how each kernel computes a thread's address, unedited:
 
 ```
 kinetic_energy_soa_kernel:
@@ -168,6 +182,13 @@ Particle particles[4] = {
     {0,0,0, 0.0f, 3.0f, 4.0f, 2.0f},
     {0,0,0, 1.0f, 1.0f, 1.0f, 6.0f},
 };
+```
+
+Compiled and run as the complete `02_aos_soa_cross_check.cu` further below:
+
+```bash
+nvcc -arch=sm_80 02_aos_soa_cross_check.cu -o 02_aos_soa_cross_check
+./02_aos_soa_cross_check
 ```
 
 Genuinely compiled and run — `total_kinetic_energy_aos` reading the array of structs above, `total_kinetic_energy_soa` reading the identical values copied into four separate `float[4]` arrays:
@@ -246,6 +267,13 @@ int main() {
 }
 ```
 
+```bash
+nvcc -arch=sm_80 01_bus_utilization.cu -o 01_bus_utilization
+./01_bus_utilization
+```
+
+Produces exactly the output shown in Worked Example 3.1.1 above.
+
 ### File: `02_aos_soa_cross_check.cu`
 
 ```cpp
@@ -304,6 +332,11 @@ int main() {
 }
 ```
 
+```bash
+nvcc -arch=sm_80 02_aos_soa_cross_check.cu -o 02_aos_soa_cross_check
+./02_aos_soa_cross_check
+```
+
 ### File: `03_coalescing_kernels.cu`
 
 ```cpp
@@ -332,6 +365,13 @@ __global__ void kinetic_energy_soa_kernel(float* vx, float* vy, float* vz, float
 }
 ```
 
+```bash
+nvcc -arch=sm_80 -cubin 03_coalescing_kernels.cu -o 03_coalescing_kernels.cubin
+cuobjdump --dump-sass 03_coalescing_kernels.cubin
+```
+
+Compiled and disassembled only — this file is never executed, since its whole purpose is the SASS evidence reproduced in Worked Example 3.3.1 above.
+
 ### Expected Output for `02_aos_soa_cross_check.cu`
 
 ```
@@ -340,7 +380,7 @@ SoA kinetic energy = 49.500000
 match? true
 ```
 
-Every number here was independently hand-traced in Worked Example 3.4.1. `03_coalescing_kernels.cu` genuinely compiles clean for `sm_80` and is included for its disassembly, not its runtime output — verify it with `nvcc -arch=sm_80 -cubin 03_coalescing_kernels.cu -o out.cubin && cuobjdump --dump-sass out.cubin` and look for the `IMAD.WIDE` multiplier this chapter traced (`4` for the SoA kernel, `28` for the AoS kernel) to reproduce Worked Example 3.3.1 yourself.
+Every number here was independently hand-traced in Worked Example 3.4.1. `03_coalescing_kernels.cu` genuinely compiles clean for `sm_80` and is included for its disassembly, not its runtime output — use the `nvcc -cubin` and `cuobjdump --dump-sass` commands shown just above and look for the `IMAD.WIDE` multiplier this chapter traced (`4` for the SoA kernel, `28` for the AoS kernel) to reproduce Worked Example 3.3.1 yourself.
 
 ## Chapter Summary
 
