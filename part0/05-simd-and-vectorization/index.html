@@ -1,0 +1,2988 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Building a GPU-Native Tensor and Autodiff Framework in CUDA C++, One Layer at a Time">
+      
+      
+        <meta name="author" content="Oluwaseyi Awoga">
+      
+      
+      
+        <link rel="prev" href="../04-gpu-programming-introduction/">
+      
+      
+        <link rel="next" href="../../part1/01-core-tensor-structure/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>5. SIMD and Vectorization - CUDA From First Principles — Under Development</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#chapter-5-simd-and-vectorization-the-warp-as-hardware-simd" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="CUDA From First Principles — Under Development" class="md-header__button md-logo" aria-label="CUDA From First Principles — Under Development" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M6 4h12v1h3v2h-3v2h3v2h-3v2h3v2h-3v2h3v2h-3v1H6v-1H3v-2h3v-2H3v-2h3v-2H3V9h3V7H3V5h3zm5 11v3h1v-3zm2 0v3h1v-3zm2 0v3h1v-3z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            CUDA From First Principles — Under Development
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              5. SIMD and Vectorization
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="CUDA From First Principles — Under Development" class="md-nav__button md-logo" aria-label="CUDA From First Principles — Under Development" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M6 4h12v1h3v2h-3v2h3v2h-3v2h3v2h-3v2h3v2h-3v1H6v-1H3v-2h3v-2H3v-2h3v-2H3V9h3V7H3V5h3zm5 11v3h1v-3zm2 0v3h1v-3zm2 0v3h1v-3z"/></svg>
+
+    </a>
+    CUDA From First Principles — Under Development
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Part 0 — CUDA Foundations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Part 0 — CUDA Foundations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../01-variables-and-types/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    1. Variables and Types
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../02-struct-design-patterns/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    2. Struct Design Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../03-memory-layout-strategies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3. Memory Layout Strategies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../04-gpu-programming-introduction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    4. GPU Programming Introduction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    5. SIMD and Vectorization
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    5. SIMD and Vectorization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#51-the-warp-as-hardware-simd-foundational" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.1 The Warp as Hardware SIMD [FOUNDATIONAL]
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5.1 The Warp as Hardware SIMD [FOUNDATIONAL]">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#intuition" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Intuition
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#background" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Background
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ascii-diagram-lockstep-vs-divergence-same-8-lanes-shown-for-both" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ASCII Diagram — lockstep vs. divergence, same 8 lanes shown for both
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#52-vectorized-memory-access-float4-loads-and-the-instruction-they-really-are-foundational" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.2 Vectorized Memory Access: float4 Loads and the Instruction They Really Are [FOUNDATIONAL]
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5.2 Vectorized Memory Access: float4 Loads and the Instruction They Really Are [FOUNDATIONAL]">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#intuition_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Intuition
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#background_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Background
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#worked-example-521-the-same-doubling-kernel-scalar-and-vectorized-disassembled" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worked Example 5.2.1 — the same doubling kernel, scalar and vectorized, disassembled
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#53-warp-level-reduction-via-shuffle-instructions-foundational" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.3 Warp-Level Reduction via Shuffle Instructions [FOUNDATIONAL]
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5.3 Warp-Level Reduction via Shuffle Instructions [FOUNDATIONAL]">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#intuition_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Intuition
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#background_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Background
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#worked-example-531-a-full-32-lane-sum-traced-as-a-butterfly-reduction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worked Example 5.3.1 — a full 32-lane sum, traced as a butterfly reduction
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ascii-diagram-the-butterfly-pattern-shown-for-8-lanes-instead-of-32-for-legibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ASCII Diagram — the butterfly pattern, shown for 8 lanes instead of 32 for legibility
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#54-warp-vote-and-ballot-lane-wise-predicates-foundational" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.4 Warp Vote and Ballot: Lane-Wise Predicates [FOUNDATIONAL]
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5.4 Warp Vote and Ballot: Lane-Wise Predicates [FOUNDATIONAL]">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#intuition_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Intuition
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#background_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Background
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#worked-example-541-32-lanes-one-predicate-each-packed-into-one-mask" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worked Example 5.4.1 — 32 lanes, one predicate each, packed into one mask
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#55-packed-simd-arithmetic-half2-and-the-road-to-tensor-cores-foundational" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.5 Packed SIMD Arithmetic: half2 and the Road to Tensor Cores [FOUNDATIONAL]
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5.5 Packed SIMD Arithmetic: half2 and the Road to Tensor Cores [FOUNDATIONAL]">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#intuition_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Intuition
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#background_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Background
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#worked-example-551-one-packed-add-confirmed-in-the-disassembly" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worked Example 5.5.1 — one packed add, confirmed in the disassembly
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#56-complete-runnable-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.6 Complete Runnable Code
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5.6 Complete Runnable Code">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#file-01_vectorized_loadscu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File: 01_vectorized_loads.cu
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#file-02_warp_shuffle_reductioncu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File: 02_warp_shuffle_reduction.cu
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#file-03_warp_vote_ballotcu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File: 03_warp_vote_ballot.cu
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#file-04_half2_simdcu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File: 04_half2_simd.cu
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#expected-output-for-04_half2_simdcu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Expected Output for 04_half2_simd.cu
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#chapter-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Chapter Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#self-check-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Self-Check Questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-we-go-next" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where We Go Next
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#worked-solutions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worked Solutions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Part 1 — Core Tensor Infrastructure
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Part 1 — Core Tensor Infrastructure
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../part1/01-core-tensor-structure/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    6. The Tensor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../part1/02-memory-layout-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    7. Memory Layout Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../part1/03-tensor-creation-functions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    8. Tensor Creation Functions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../part1/04-specialized-tensor-types/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    9. Specialized Tensor Types
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../part1/05-device-abstraction-layer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    10. Device Abstraction Layer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../part1/06-memory-management-system/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    11. Memory Management System
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Part 2 — Basic Tensor Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Part 2 — Basic Tensor Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../part2/01-element-wise-operations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    12. Element-wise Operations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../part2/02-matrix-operations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    13. Matrix Operations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../part2/03-reduction-operations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    14. Reduction Operations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Part 3 — Computational Graph Foundation
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Part 3 — Computational Graph Foundation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../part3/01-graph-node-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    15. Graph Node Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Part 4 — Automatic Differentiation Engine
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Part 4 — Automatic Differentiation Engine
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../part4/01-backward-function-implementation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    16. Backward Function Implementation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../part4/02-gradient-computation-engine/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    17. Gradient Computation Engine
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Part 5 — GPU Acceleration and Performance
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Part 5 — GPU Acceleration and Performance
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../part5/01-gpu-kernel-implementation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    18. GPU Kernel Implementation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../part5/02-performance-optimization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    19. Performance Optimization Techniques
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Part 6 — Neural Network Building Blocks
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Part 6 — Neural Network Building Blocks
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../part6/01-neural-network-layers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    20. Neural Network Layers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../part6/02-advanced-features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    21. Advanced Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Part 7 — Financial Computing Applications
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Part 7 — Financial Computing Applications
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../part7/01-quantitative-finance-examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    22. Quantitative Finance Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Appendix
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../appendix/installation-setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    A. Installation & Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../appendix/practice-quiz/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    B. Practice Quiz
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#51-the-warp-as-hardware-simd-foundational" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.1 The Warp as Hardware SIMD [FOUNDATIONAL]
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5.1 The Warp as Hardware SIMD [FOUNDATIONAL]">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#intuition" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Intuition
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#background" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Background
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ascii-diagram-lockstep-vs-divergence-same-8-lanes-shown-for-both" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ASCII Diagram — lockstep vs. divergence, same 8 lanes shown for both
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#52-vectorized-memory-access-float4-loads-and-the-instruction-they-really-are-foundational" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.2 Vectorized Memory Access: float4 Loads and the Instruction They Really Are [FOUNDATIONAL]
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5.2 Vectorized Memory Access: float4 Loads and the Instruction They Really Are [FOUNDATIONAL]">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#intuition_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Intuition
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#background_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Background
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#worked-example-521-the-same-doubling-kernel-scalar-and-vectorized-disassembled" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worked Example 5.2.1 — the same doubling kernel, scalar and vectorized, disassembled
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#53-warp-level-reduction-via-shuffle-instructions-foundational" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.3 Warp-Level Reduction via Shuffle Instructions [FOUNDATIONAL]
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5.3 Warp-Level Reduction via Shuffle Instructions [FOUNDATIONAL]">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#intuition_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Intuition
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#background_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Background
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#worked-example-531-a-full-32-lane-sum-traced-as-a-butterfly-reduction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worked Example 5.3.1 — a full 32-lane sum, traced as a butterfly reduction
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ascii-diagram-the-butterfly-pattern-shown-for-8-lanes-instead-of-32-for-legibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ASCII Diagram — the butterfly pattern, shown for 8 lanes instead of 32 for legibility
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#54-warp-vote-and-ballot-lane-wise-predicates-foundational" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.4 Warp Vote and Ballot: Lane-Wise Predicates [FOUNDATIONAL]
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5.4 Warp Vote and Ballot: Lane-Wise Predicates [FOUNDATIONAL]">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#intuition_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Intuition
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#background_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Background
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#worked-example-541-32-lanes-one-predicate-each-packed-into-one-mask" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worked Example 5.4.1 — 32 lanes, one predicate each, packed into one mask
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#55-packed-simd-arithmetic-half2-and-the-road-to-tensor-cores-foundational" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.5 Packed SIMD Arithmetic: half2 and the Road to Tensor Cores [FOUNDATIONAL]
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5.5 Packed SIMD Arithmetic: half2 and the Road to Tensor Cores [FOUNDATIONAL]">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#intuition_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Intuition
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#background_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Background
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#worked-example-551-one-packed-add-confirmed-in-the-disassembly" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worked Example 5.5.1 — one packed add, confirmed in the disassembly
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#56-complete-runnable-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.6 Complete Runnable Code
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5.6 Complete Runnable Code">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#file-01_vectorized_loadscu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File: 01_vectorized_loads.cu
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#file-02_warp_shuffle_reductioncu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File: 02_warp_shuffle_reduction.cu
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#file-03_warp_vote_ballotcu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File: 03_warp_vote_ballot.cu
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#file-04_half2_simdcu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File: 04_half2_simd.cu
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#expected-output-for-04_half2_simdcu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Expected Output for 04_half2_simd.cu
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#chapter-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Chapter Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#self-check-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Self-Check Questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-we-go-next" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where We Go Next
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#worked-solutions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worked Solutions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="chapter-5-simd-and-vectorization-the-warp-as-hardware-simd">Chapter 5: SIMD and Vectorization — The Warp as Hardware SIMD<a class="headerlink" href="#chapter-5-simd-and-vectorization-the-warp-as-hardware-simd" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p>"A CPU's SIMD register is a type you name in source code — eight lanes, declared, filled, and reduced by instructions you write yourself. A GPU's warp is the same idea with the naming stripped away: thirty-two lanes the hardware forms for you, whether you ever write the number 32 anywhere in your kernel or not. This chapter is about the handful of places CUDA lets you reach past that abstraction and talk to the lanes directly — one 128-bit load standing in for four, one instruction moving a value sideways between threads, one bitmask capturing all thirty-two comparisons at once."</p>
+</blockquote>
+<p><strong>What you will understand by the end of this chapter:</strong></p>
+<ul>
+<li>Why a warp's lockstep, thirty-two-lane execution is the direct hardware relative of a CPU SIMD register — the same "one instruction, many lanes" idea, realized as SIMT (many independent threads converging) rather than true SIMD (one instruction, one operand, many lanes)</li>
+<li>Vectorized memory access via <code>float4</code>: how a single 128-bit load replaces four separate 32-bit loads, read directly out of disassembled machine code as <code>LDG.E.128</code> versus four instances of plain <code>LDG.E</code></li>
+<li>Warp-shuffle reduction (<code>__shfl_down_sync</code>): summing 32 values down to one using only registers, with no shared memory and no <code>__syncthreads()</code>, traced lane-by-lane against a closed-form sum</li>
+<li>Warp-vote and ballot (<code>__ballot_sync</code>): the GPU's version of a SIMD lane-wise comparison, packing all 32 threads' boolean results into a single 32-bit mask — and a genuine surprise in the disassembly about how that mask actually gets produced</li>
+<li>Packed half-precision arithmetic (<code>half2</code>, <code>__hadd2</code>): the one place this chapter's hardware performs <em>true</em> 2-wide SIMD — two values, one register, one instruction, inside a single thread — and why that idea is the direct on-ramp to Part 6's tensor cores</li>
+</ul>
+<p><strong>What you need to know first:</strong></p>
+<ul>
+<li>Chapter 1.5 (<code>float4</code>/<code>float2</code>: layout, <code>sizeof</code>, and alignment guarantees) — this chapter's Section 5.2 depends on exactly those guarantees</li>
+<li>Chapter 3 in full (Struct-of-Arrays, warp coalescing, and the genuine <code>IMAD.WIDE</code> disassembly evidence from Worked Example 3.3.1) — Section 5.2's disassembly evidence is read the same way</li>
+<li>Chapter 4.1 (the thread hierarchy) and Chapter 4.4 (memory coalescing at full generality) — this chapter assumes you're comfortable with <code>blockIdx</code>/<code>threadIdx</code>/<code>blockDim</code> and with the warp as "32 threads scheduled together," both established there</li>
+<li>If you've read the Mojo edition: Mojo's Chapter 5 is built around a CPU-style, fixed-width <code>SIMD[DType, width]</code> register type, with an explicit main-loop-plus-remainder shape for looping over data wider than one register. CUDA has no source-level equivalent of that type for general arithmetic — its SIMD <em>is</em> the warp, already covered structurally in Chapters 3 and 4. Rather than force a CPU-shaped chapter onto GPU hardware that doesn't work that way, this chapter covers CUDA's own genuine warp-level and packed-arithmetic mechanisms, which have no real analogue in the Mojo edition's Chapter 5.</li>
+</ul>
+<h2 id="51-the-warp-as-hardware-simd-foundational">5.1 The Warp as Hardware SIMD <code>[FOUNDATIONAL]</code><a class="headerlink" href="#51-the-warp-as-hardware-simd-foundational" title="Permanent link">&para;</a></h2>
+<h3 id="intuition">Intuition<a class="headerlink" href="#intuition" title="Permanent link">&para;</a></h3>
+<p>A CPU SIMD register executes one instruction across every lane in the same clock cycle, full stop — there is no such thing as "lane 3 takes a different branch than lane 5," because there is only ever one instruction stream and one set of lanes riding along with it. A GPU warp looks the same in the common case — 32 threads, one instruction, lockstep — but it is built out of 32 genuinely independent threads, each with its own program counter and its own registers, that the hardware <em>chooses</em> to run together. When every thread in a warp wants to execute the same instruction, a warp behaves exactly like a 32-wide SIMD register. The moment an <code>if</code> makes some threads want one instruction and other threads want a different one, that equivalence breaks: the hardware runs both paths, once each, activating only the threads that wanted that specific path and masking off the rest — a mechanism with no equivalent in true SIMD hardware, because true SIMD hardware never had the <em>option</em> of per-lane divergence in the first place.</p>
+<h3 id="background">Background<a class="headerlink" href="#background" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>CPU SIMD register (e.g. Mojo's <code>SIMD[DType.float32, 8]</code>)</th>
+<th>GPU warp (this book's Chapters 3–4)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Width</td>
+<td>Fixed at compile time by the type itself (4, 8, 16, ...)</td>
+<td>Fixed by hardware at 32, never named as a type in source</td>
+</tr>
+<tr>
+<td>Where it's declared</td>
+<td>An explicit variable of an explicit width</td>
+<td>Implicit — a warp is however many of a block's threads the hardware groups together, 32 at a time</td>
+</tr>
+<tr>
+<td>One instruction, one operand, all lanes</td>
+<td>Always true — that's the entire definition of the hardware</td>
+<td>True only when all 32 threads agree on the next instruction</td>
+</tr>
+<tr>
+<td>Divergent control flow</td>
+<td>Not applicable — one instruction stream, no per-lane branching at the ISA level</td>
+<td>Handled automatically: both sides of a branch execute, each with only the relevant threads active, at a real performance cost</td>
+</tr>
+</tbody>
+</table>
+<h3 id="ascii-diagram-lockstep-vs-divergence-same-8-lanes-shown-for-both">ASCII Diagram — lockstep vs. divergence, same 8 lanes shown for both<a class="headerlink" href="#ascii-diagram-lockstep-vs-divergence-same-8-lanes-shown-for-both" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>No divergence -- every lane executes the SAME instruction, one cycle:
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a> lane: 0    1    2    3    4    5    6    7
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a> instr: [ADD] [ADD] [ADD] [ADD] [ADD] [ADD] [ADD] [ADD]   &lt;- 1 instruction issued, all lanes busy
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>Divergence at `if (lane &lt; 4) { A } else { B }`:
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a> lane: 0    1    2    3    4    5    6    7
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a> pass1: [A]  [A]  [A]  [A]  [--] [--] [--] [--]   &lt;- instruction stream A, only lanes 0-3 active
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a> pass2: [--] [--] [--] [--] [B]  [B]  [B]  [B]    &lt;- instruction stream B, only lanes 4-7 active
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>                                                       2 instructions issued to cover 8 lanes' work
+</code></pre></div>
+<blockquote>
+<p><code>[COMMON TRAP]</code> It's tempting to treat a warp as "just a 32-wide SIMD register" and assume any per-thread branch is free, the way branching on a scalar CPU core is. It isn't: <code>pass1</code> and <code>pass2</code> above both execute in full, one after the other, for the <em>entire</em> warp — the threads sitting out one pass aren't skipped in time, they're masked off and idle while the other half does real work. A kernel with heavy, unpredictable per-thread branching can lose most of a warp's theoretical 32-wide throughput this way, a cost that has no equivalent in a CPU SIMD register, which never had branches inside it to begin with.</p>
+</blockquote>
+<h2 id="52-vectorized-memory-access-float4-loads-and-the-instruction-they-really-are-foundational">5.2 Vectorized Memory Access: <code>float4</code> Loads and the Instruction They Really Are <code>[FOUNDATIONAL]</code><a class="headerlink" href="#52-vectorized-memory-access-float4-loads-and-the-instruction-they-really-are-foundational" title="Permanent link">&para;</a></h2>
+<h3 id="intuition_1">Intuition<a class="headerlink" href="#intuition_1" title="Permanent link">&para;</a></h3>
+<p>Chapter 1.5 established that <code>float4</code> is four <code>float</code>s glued into one 16-byte, 16-byte-aligned struct — genuinely one contiguous unit of memory, not four independent variables that happen to sit next to each other. Section 3.3 showed a warp's real address-computation instruction, <code>IMAD.WIDE</code>, computing one address per thread for one <code>float</code> at a time. Put the two facts together and a new option appears: if a thread reads a <code>float4</code> instead of a <code>float</code>, one single memory instruction moves 16 bytes instead of 4 — the compiler doesn't need four separate load instructions to move four numbers it already knows sit contiguously in memory, it can issue one wider one.</p>
+<h3 id="background_1">Background<a class="headerlink" href="#background_1" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Scalar load: <code>float v = in[i];</code></th>
+<th>Vectorized load: <code>float4 v = in4[i];</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Bytes moved by one load instruction</td>
+<td>4</td>
+<td>16</td>
+</tr>
+<tr>
+<td>Threads needed to cover 1024 floats</td>
+<td>1024, each issuing its own load</td>
+<td>256, each issuing its own load</td>
+</tr>
+<tr>
+<td>Load instructions issued in total</td>
+<td>1024</td>
+<td>256 — one quarter as many</td>
+</tr>
+<tr>
+<td>SASS instruction (genuinely observed below)</td>
+<td><code>LDG.E</code> (32-bit load)</td>
+<td><code>LDG.E.128</code> (128-bit load)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="worked-example-521-the-same-doubling-kernel-scalar-and-vectorized-disassembled">Worked Example 5.2.1 — the same doubling kernel, scalar and vectorized, disassembled<a class="headerlink" href="#worked-example-521-the-same-doubling-kernel-scalar-and-vectorized-disassembled" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1">// Scalar: one 4-byte load per thread</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">__global__</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="n">load_scalar_kernel</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="kt">float</span><span class="o">*</span><span class="w"> </span><span class="n">in</span><span class="p">,</span><span class="w"> </span><span class="kt">float</span><span class="o">*</span><span class="w"> </span><span class="n">out</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">n</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">blockIdx</span><span class="p">.</span><span class="n">x</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">blockDim</span><span class="p">.</span><span class="n">x</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">threadIdx</span><span class="p">.</span><span class="n">x</span><span class="p">;</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">n</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">        </span><span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">in</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mf">2.0f</span><span class="p">;</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="p">}</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="c1">// Vectorized: one 16-byte (float4) load does the work of 4 scalar loads</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="n">__global__</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="n">load_vectorized_kernel</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">float4</span><span class="o">*</span><span class="w"> </span><span class="n">in</span><span class="p">,</span><span class="w"> </span><span class="n">float4</span><span class="o">*</span><span class="w"> </span><span class="n">out</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">n4</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">blockIdx</span><span class="p">.</span><span class="n">x</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">blockDim</span><span class="p">.</span><span class="n">x</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">threadIdx</span><span class="p">.</span><span class="n">x</span><span class="p">;</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">n4</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">        </span><span class="n">float4</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">in</span><span class="p">[</span><span class="n">i</span><span class="p">];</span>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">        </span><span class="n">v</span><span class="p">.</span><span class="n">x</span><span class="w"> </span><span class="o">*=</span><span class="w"> </span><span class="mf">2.0f</span><span class="p">;</span><span class="w"> </span><span class="n">v</span><span class="p">.</span><span class="n">y</span><span class="w"> </span><span class="o">*=</span><span class="w"> </span><span class="mf">2.0f</span><span class="p">;</span><span class="w"> </span><span class="n">v</span><span class="p">.</span><span class="n">z</span><span class="w"> </span><span class="o">*=</span><span class="w"> </span><span class="mf">2.0f</span><span class="p">;</span><span class="w"> </span><span class="n">v</span><span class="p">.</span><span class="n">w</span><span class="w"> </span><span class="o">*=</span><span class="w"> </span><span class="mf">2.0f</span><span class="p">;</span>
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="w">        </span><span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">;</span>
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="p">}</span>
+</code></pre></div>
+<p>Compiled and disassembled as the complete <code>01_vectorized_loads.cu</code> further below:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>nvcc<span class="w"> </span>-arch<span class="o">=</span>sm_80<span class="w"> </span>01_vectorized_loads.cu<span class="w"> </span>-o<span class="w"> </span>01_vectorized_loads
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>./01_vectorized_loads
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>nvcc<span class="w"> </span>-arch<span class="o">=</span>sm_80<span class="w"> </span>-cubin<span class="w"> </span>01_vectorized_loads.cu<span class="w"> </span>-o<span class="w"> </span>01_vectorized_loads.cubin
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>cuobjdump<span class="w"> </span>--dump-sass<span class="w"> </span>01_vectorized_loads.cubin
+</code></pre></div>
+<p>Genuinely compiled, run, and disassembled:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>sizeof(float4) = 16 bytes (4 floats per vectorized load)
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>Function : _Z22load_vectorized_kernelPK6float4PS_i
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    LDG.E.128 R8, [R2.64] ;
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    STG.E.128 [R4.64], R8 ;
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>Function : _Z18load_scalar_kernelPKfPfi
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    LDG.E R2, [R2.64] ;
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>    STG.E [R4.64], R7 ;
+</code></pre></div>
+<p>Both kernels genuinely compile clean for <code>sm_80</code>, and the disassembly is unedited: <code>load_scalar_kernel</code> compiles to plain <code>LDG.E</code>/<code>STG.E</code> — the ordinary 32-bit load/store this book has been reading since Chapter 3 — while <code>load_vectorized_kernel</code> compiles to <code>LDG.E.128</code>/<code>STG.E.128</code>, a single instruction moving all 16 bytes of one <code>float4</code> at once. Neither kernel is launched in this book's no-GPU environment, so this section's evidence is exactly the <em>shape</em> of Chapter 3.3's: not "the vectorized version ran faster," but "the compiler genuinely emits a wider instruction," directly readable out of the machine code with no execution required.</p>
+<blockquote>
+<p><code>[COMMON TRAP]</code> <code>float4</code>'s 16-byte alignment (Chapter 1.5) is not a suggestion — it's the precondition this section's whole argument rests on. <code>in4[i]</code> is only a legal, correctly-behaving vectorized load if the underlying buffer is actually 16-byte aligned in memory; <code>cudaMalloc</code> genuinely guarantees this for any allocation it returns, but reinterpreting an arbitrary, already-existing <code>float*</code> as a <code>float4*</code> (via a raw pointer cast, rather than allocating it as <code>float4</code> from the start) can silently violate that guarantee, and an unaligned vectorized load on real hardware either falls back to a slower path or, in the worst case, faults outright.</p>
+</blockquote>
+<h2 id="53-warp-level-reduction-via-shuffle-instructions-foundational">5.3 Warp-Level Reduction via Shuffle Instructions <code>[FOUNDATIONAL]</code><a class="headerlink" href="#53-warp-level-reduction-via-shuffle-instructions-foundational" title="Permanent link">&para;</a></h2>
+<h3 id="intuition_2">Intuition<a class="headerlink" href="#intuition_2" title="Permanent link">&para;</a></h3>
+<p>A CPU SIMD reduction (Mojo's version of this idea) sums many elements into one width-wide register across an outer loop, then performs a single horizontal reduction at the very end to collapse that one register down to a scalar. A warp's <code>__shfl_down_sync</code> intrinsic <em>is</em> that horizontal-reduction step, generalized to 32 lanes and performed entirely in registers: it lets one thread read another specific thread's register value directly, with no shared memory, no <code>__syncthreads()</code>, and no memory traffic at all — the hardware moves the value sideways between lanes through a dedicated crossbar, not through any address either thread could compute or dereference.</p>
+<h3 id="background_2">Background<a class="headerlink" href="#background_2" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Shared-memory reduction</th>
+<th>Warp-shuffle reduction</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Where partial sums live</td>
+<td>A <code>__shared__</code> array, indexed by <code>threadIdx.x</code></td>
+<td>Registers only — one value per thread, never spilled to memory</td>
+</tr>
+<tr>
+<td>Data movement per step</td>
+<td>Store to shared memory, <code>__syncthreads()</code>, then load back</td>
+<td><code>__shfl_down_sync</code> moves a register value directly from one lane to another</td>
+</tr>
+<tr>
+<td>Needed for reductions bigger than one warp</td>
+<td>Yes, regardless of size</td>
+<td>A single warp handles at most 32 elements this way; combining <em>multiple</em> warps' results still needs shared memory</td>
+</tr>
+</tbody>
+</table>
+<h3 id="worked-example-531-a-full-32-lane-sum-traced-as-a-butterfly-reduction">Worked Example 5.3.1 — a full 32-lane sum, traced as a butterfly reduction<a class="headerlink" href="#worked-example-531-a-full-32-lane-sum-traced-as-a-butterfly-reduction" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">__global__</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="n">warp_reduce_sum_kernel</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="kt">float</span><span class="o">*</span><span class="w"> </span><span class="n">in</span><span class="p">,</span><span class="w"> </span><span class="kt">float</span><span class="o">*</span><span class="w"> </span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">lane</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">threadIdx</span><span class="p">.</span><span class="n">x</span><span class="p">;</span><span class="w">  </span><span class="c1">// assume exactly one warp: 32 threads</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span><span class="kt">float</span><span class="w"> </span><span class="n">val</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">in</span><span class="p">[</span><span class="n">lane</span><span class="p">];</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">offset</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">16</span><span class="p">;</span><span class="w"> </span><span class="n">offset</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">offset</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">        </span><span class="n">val</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">__shfl_down_sync</span><span class="p">(</span><span class="mh">0xFFFFFFFF</span><span class="p">,</span><span class="w"> </span><span class="n">val</span><span class="p">,</span><span class="w"> </span><span class="n">offset</span><span class="p">);</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">lane</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="n">out</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">val</span><span class="p">;</span><span class="w">  </span><span class="c1">// lane 0 now holds the full sum</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="p">}</span>
+</code></pre></div>
+<p><code>__shfl_down_sync(mask, val, offset)</code> returns the calling lane's own <code>val</code> plus, implicitly, nothing — it returns <em>the value held by the lane <code>offset</code> positions higher</em>, which the loop above then adds in. Five iterations (<code>offset = 16, 8, 4, 2, 1</code>) are enough to fold 32 values down to one, because each iteration halves the number of lanes still holding a "live" partial sum: after <code>offset=16</code>, lane 0 holds <code>v[0]+v[16]</code>; after <code>offset=8</code>, lane 0 holds <code>(v[0]+v[16]) + (v[8]+v[24])</code>; and so on until, after <code>offset=1</code>, lane 0 holds every one of the 32 original values added together exactly once.</p>
+<p>Compiled, disassembled, and cross-checked against a host-side simulation of the identical butterfly pattern, as the complete <code>02_warp_shuffle_reduction.cu</code> further below:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>nvcc<span class="w"> </span>-arch<span class="o">=</span>sm_80<span class="w"> </span>02_warp_shuffle_reduction.cu<span class="w"> </span>-o<span class="w"> </span>02_warp_shuffle_reduction
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>./02_warp_shuffle_reduction
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>nvcc<span class="w"> </span>-arch<span class="o">=</span>sm_80<span class="w"> </span>-cubin<span class="w"> </span>02_warp_shuffle_reduction.cu<span class="w"> </span>-o<span class="w"> </span>02_warp_shuffle_reduction.cubin
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>cuobjdump<span class="w"> </span>--dump-sass<span class="w"> </span>02_warp_shuffle_reduction.cubin
+</code></pre></div>
+<p>Genuinely compiled, run, and disassembled:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>host-simulated warp-shuffle sum = 528.000000
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>closed-form sum(1..32) = n(n+1)/2 = 528.000000
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>match? true
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>SHFL.DOWN PT, R5, R2, 0x10, 0x1f ;   // offset=16 (0x10)
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>SHFL.DOWN PT, R0, R5, 0x8, 0x1f ;    // offset=8
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>SHFL.DOWN PT, R7, R0, 0x4, 0x1f ;    // offset=4
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>SHFL.DOWN PT, R4, R7, 0x2, 0x1f ;    // offset=2
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>SHFL.DOWN PT, R9, R4, 0x1, 0x1f ;    // offset=1
+</code></pre></div>
+<p>The kernel is never launched — this environment has no GPU — so <code>main()</code> instead runs a host-side function that performs the exact same five-step butterfly pattern on an ordinary 32-element array, using array indexing to stand in for lane-to-lane shuffles. For lanes holding <code>1, 2, 3, ..., 32</code>, the closed-form sum <code>n(n+1)/2 = 32×33/2 = 528</code> matches the simulation exactly — the same cross-check discipline Chapter 3.4 used for AoS/SoA kinetic energy. The disassembly independently confirms the kernel really does compile down to exactly five <code>SHFL.DOWN</code> instructions, one per loop iteration, with the exact offsets (<code>0x10, 0x8, 0x4, 0x2, 0x1</code> — 16, 8, 4, 2, 1 in hex) the source code's loop specifies, and the final <code>0x1f</code> operand on every instruction is the warp-width mask (31 = <code>0b11111</code>, confirming all 32 lanes participate).</p>
+<h3 id="ascii-diagram-the-butterfly-pattern-shown-for-8-lanes-instead-of-32-for-legibility">ASCII Diagram — the butterfly pattern, shown for 8 lanes instead of 32 for legibility<a class="headerlink" href="#ascii-diagram-the-butterfly-pattern-shown-for-8-lanes-instead-of-32-for-legibility" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>lanes:    0    1    2    3    4    5    6    7
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>values:   1    2    3    4    5    6    7    8
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>offset=4: 0+4  1+5  2+6  3+7  --   --   --   --
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>          6    8    10   12   (lanes 4-7's values no longer needed)
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>offset=2: 0+2  1+3  --   --
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>          16   20
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>offset=1: 0+1
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>          36                    &lt;- sum(1..8) = 8*9/2 = 36, matching lane 0
+</code></pre></div>
+<blockquote>
+<p><code>[COMMON TRAP]</code> <code>__shfl_down_sync</code>'s first argument, the mask, is not a formality — it tells the hardware exactly which lanes are participating in this specific shuffle, and every participating lane must pass the <em>same</em> mask or the result is undefined. <code>0xFFFFFFFF</code> (all 32 bits set) is only correct when the full warp is genuinely active and un-diverged at that point in the kernel; calling a shuffle with that mask from inside a divergent branch that only some threads entered is exactly the kind of bug Section 5.1's divergence discussion warns about, and unlike the older, now-removed unmasked <code>__shfl_down</code>, the <code>_sync</code> variants at least force you to state your assumption about which lanes are present, even though they can't verify it for you.</p>
+</blockquote>
+<h2 id="54-warp-vote-and-ballot-lane-wise-predicates-foundational">5.4 Warp Vote and Ballot: Lane-Wise Predicates <code>[FOUNDATIONAL]</code><a class="headerlink" href="#54-warp-vote-and-ballot-lane-wise-predicates-foundational" title="Permanent link">&para;</a></h2>
+<h3 id="intuition_3">Intuition<a class="headerlink" href="#intuition_3" title="Permanent link">&para;</a></h3>
+<p>A CPU SIMD comparison (Mojo's version of this idea) takes two width-wide registers and produces a third, width-wide boolean register — one true/false result per lane, still living in vector-register form. CUDA's warp-vote intrinsics do the equivalent job with a different shape: <code>__ballot_sync</code> takes one boolean predicate <em>per thread</em> and packs all 32 threads' results into a single ordinary 32-bit integer, one bit per lane, that any thread in the warp can then read as plain data — no SIMD register type involved at all, just an <code>unsigned int</code> any thread can store, branch on, or pass along.</p>
+<h3 id="background_3">Background<a class="headerlink" href="#background_3" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>CPU SIMD compare (e.g. Mojo's <code>SIMD[DType.bool, 8]</code> result)</th>
+<th>CUDA <code>__ballot_sync</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Result shape</td>
+<td>A width-wide vector of booleans, one lane's worth of storage per result bit</td>
+<td>A single 32-bit integer, one bit per lane, held identically by every participating thread</td>
+</tr>
+<tr>
+<td>How one lane's result is read</td>
+<td>Indexing into the boolean vector</td>
+<td>A bitwise test, <code>(mask &gt;&gt; lane) &amp; 1</code></td>
+</tr>
+<tr>
+<td>Where the result lives</td>
+<td>A vector register, the same "SIMD-shaped" storage as the data it came from</td>
+<td>An ordinary scalar register — completely ordinary data from that point on</td>
+</tr>
+</tbody>
+</table>
+<h3 id="worked-example-541-32-lanes-one-predicate-each-packed-into-one-mask">Worked Example 5.4.1 — 32 lanes, one predicate each, packed into one mask<a class="headerlink" href="#worked-example-541-32-lanes-one-predicate-each-packed-into-one-mask" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1">// Every thread tests a per-lane predicate; __ballot_sync packs all 32 results</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1">// into a single 32-bit mask, one bit per lane -- CUDA's lane-wise SIMD compare.</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="n">__global__</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="n">ballot_kernel</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="kt">float</span><span class="o">*</span><span class="w"> </span><span class="n">values</span><span class="p">,</span><span class="w"> </span><span class="kt">unsigned</span><span class="w"> </span><span class="kt">int</span><span class="o">*</span><span class="w"> </span><span class="n">out_mask</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">lane</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">threadIdx</span><span class="p">.</span><span class="n">x</span><span class="p">;</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="n">predicate</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">values</span><span class="p">[</span><span class="n">lane</span><span class="p">]</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">10.0f</span><span class="p">;</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">    </span><span class="kt">unsigned</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">mask</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">__ballot_sync</span><span class="p">(</span><span class="mh">0xFFFFFFFF</span><span class="p">,</span><span class="w"> </span><span class="n">predicate</span><span class="p">);</span>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">lane</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="n">out_mask</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">mask</span><span class="p">;</span>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="p">}</span>
+</code></pre></div>
+<p>Compiled, disassembled, and cross-checked against a host-side bit-packing simulation, as the complete <code>03_warp_vote_ballot.cu</code> further below:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>nvcc<span class="w"> </span>-arch<span class="o">=</span>sm_80<span class="w"> </span>03_warp_vote_ballot.cu<span class="w"> </span>-o<span class="w"> </span>03_warp_vote_ballot
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>./03_warp_vote_ballot
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>nvcc<span class="w"> </span>-arch<span class="o">=</span>sm_80<span class="w"> </span>-cubin<span class="w"> </span>03_warp_vote_ballot.cu<span class="w"> </span>-o<span class="w"> </span>03_warp_vote_ballot.cubin
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>cuobjdump<span class="w"> </span>--dump-sass<span class="w"> </span>03_warp_vote_ballot.cubin
+</code></pre></div>
+<p>Genuinely compiled, run, and disassembled:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>values[lane] = lane index (0..31); predicate: value &gt; 10.0
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>host-simulated ballot mask = 0xFFFFF800
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>threads satisfying predicate (lanes 11..31) = 21
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>FSETP.GT.AND P0, PT, R2, 10, PT ;
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>VOTE.ANY R5, PT, P0 ;
+</code></pre></div>
+<p>For <code>values[lane] = lane</code> (0 through 31), the predicate <code>value &gt; 10.0</code> is true for lanes 11 through 31 inclusive — 21 lanes — and the host-side simulation, which sets bit <code>lane</code> for every lane satisfying the predicate, produces <code>0xFFFFF800</code>: bits 11 through 31 set, bits 0 through 10 clear, exactly matching. The disassembly holds a genuine surprise worth naming directly: there is no SASS instruction called <code>VOTE.BALLOT</code>. <code>__ballot_sync</code> compiles down to the <em>same</em> <code>VOTE</code> instruction family as <code>__any_sync</code>/<code>__all_sync</code>, here shown as <code>VOTE.ANY</code>; the instruction has two outputs at the hardware level — a single reduced predicate (which mode, <code>ANY</code>/<code>ALL</code>/<code>EQ</code>, decides how it's computed) and a full 32-bit register holding the raw per-lane mask, always produced regardless of mode. This code only reads the register output (<code>R5</code>, stored into <code>out_mask[0]</code>) and discards the reduced predicate (written to <code>PT</code>, CUDA's "don't care" predicate register) — so the <code>.ANY</code> in the mnemonic describes machinery this specific kernel never uses, not the operation the source code actually asked for. This is the same kind of "read the real mechanism, not the name of the intrinsic" lesson Section 5.3's mask argument taught, one level deeper.</p>
+<blockquote>
+<p><code>[COMMON TRAP]</code> It's tempting to read <code>VOTE.ANY</code> in a disassembly and conclude the compiler "optimized <code>__ballot_sync</code> into <code>__any_sync</code>," changing the program's meaning. It hasn't: the full ballot mask genuinely ends up in <code>R5</code> and genuinely reaches <code>out_mask[0]</code> unchanged, because that register output exists on every <code>VOTE</code> instruction independent of which reduction mode is selected. The lesson here is the same one Chapter 3's <code>IMAD.WIDE</code> multiplier taught — a single hardware instruction can carry more information than its source-level name suggests, and the only way to know for certain which output a compiled kernel is actually keeping is to read the disassembly, not to guess from the intrinsic's name.</p>
+</blockquote>
+<h2 id="55-packed-simd-arithmetic-half2-and-the-road-to-tensor-cores-foundational">5.5 Packed SIMD Arithmetic: <code>half2</code> and the Road to Tensor Cores <code>[FOUNDATIONAL]</code><a class="headerlink" href="#55-packed-simd-arithmetic-half2-and-the-road-to-tensor-cores-foundational" title="Permanent link">&para;</a></h2>
+<h3 id="intuition_4">Intuition<a class="headerlink" href="#intuition_4" title="Permanent link">&para;</a></h3>
+<p>Every mechanism so far in this chapter has been SIMT wearing a SIMD-shaped hat: 32 genuinely separate threads, each with its own registers and its own program counter, that only <em>look</em> like one 32-wide vector operation when they agree on what to do next. <code>half2</code> packed arithmetic is the one place in this chapter where that's no longer true. A single thread holding one <code>half2</code> value has two independent 16-bit floating-point numbers living inside one ordinary 32-bit register, and an intrinsic like <code>__hadd2</code> performs <em>both</em> additions in one instruction, on one thread, with no other thread involved at all — genuine, hardware-level 2-wide SIMD, the closest thing this book's CUDA hardware has to Mojo's <code>SIMD[DType.float16, 2]</code>.</p>
+<h3 id="background_4">Background<a class="headerlink" href="#background_4" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Warp-level mechanisms (Sections 5.2–5.4)</th>
+<th><code>half2</code> packed arithmetic</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Parallelism comes from</td>
+<td>32 separate threads, each with its own registers</td>
+<td>2 lanes packed into <em>one</em> thread's <em>one</em> register</td>
+</tr>
+<tr>
+<td>Instruction issued by</td>
+<td>The warp scheduler, once per warp</td>
+<td>One ordinary thread, on its own</td>
+</tr>
+<tr>
+<td>Mechanism name</td>
+<td>SIMT (Single Instruction, Multiple Threads)</td>
+<td>True SIMD (Single Instruction, Multiple Data)</td>
+</tr>
+<tr>
+<td>Where this goes next</td>
+<td>—</td>
+<td>Part 6's tensor cores extend this exact packed-math idea from 2 values to a whole matrix tile at once</td>
+</tr>
+</tbody>
+</table>
+<h3 id="worked-example-551-one-packed-add-confirmed-in-the-disassembly">Worked Example 5.5.1 — one packed add, confirmed in the disassembly<a class="headerlink" href="#worked-example-551-one-packed-add-confirmed-in-the-disassembly" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1">// Two independent fp16 additions packed into ONE 32-bit register and ONE</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="c1">// instruction -- genuine 2-wide SIMD, not SIMT: both lanes of the half2 are</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="c1">// computed by a single thread, using the hardware's packed-math ALU.</span>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="n">__global__</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="n">half2_add_kernel</span><span class="p">(</span><span class="n">half2</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="n">half2</span><span class="w"> </span><span class="n">b</span><span class="p">,</span><span class="w"> </span><span class="n">half2</span><span class="o">*</span><span class="w"> </span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">    </span><span class="o">*</span><span class="n">out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">__hadd2</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="n">b</span><span class="p">);</span>
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="p">}</span>
+</code></pre></div>
+<p>Compiled and disassembled as the complete <code>04_half2_simd.cu</code> further below (<code>__hadd2</code> and <code>half2</code> construction are device-only in this toolkit, so this example is compile-and-disassemble evidence, in the exact style of Chapter 3's <code>03_coalescing_kernels.cu</code>, rather than a host-run program):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>nvcc<span class="w"> </span>-arch<span class="o">=</span>sm_80<span class="w"> </span>04_half2_simd.cu<span class="w"> </span>-o<span class="w"> </span>04_half2_simd
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>./04_half2_simd
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>nvcc<span class="w"> </span>-arch<span class="o">=</span>sm_80<span class="w"> </span>-cubin<span class="w"> </span>04_half2_simd.cu<span class="w"> </span>-o<span class="w"> </span>04_half2_simd.cubin
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>cuobjdump<span class="w"> </span>--dump-sass<span class="w"> </span>04_half2_simd.cubin
+</code></pre></div>
+<p>Genuinely compiled, run, and disassembled:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>lane 0: a=1.5 b=10.0 a+b=11.5
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>lane 1: a=2.5 b=20.0 a+b=22.5
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>sizeof(half2) = 4 bytes (two 16-bit lanes packed into one 32-bit register)
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>
+<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>HADD2 R5, R5, c[0x0] [0x164] ;
+</code></pre></div>
+<p><code>main()</code> here runs entirely on the host, computing an ordinary scalar fp32 reference for the same two lane-pairs the kernel's packed add would produce — <code>1.5+10.0=11.5</code> and <code>2.5+20.0=22.5</code> — because <code>half2</code> construction and <code>__hadd2</code> are device-only functions in this toolkit and this book's no-GPU environment cannot call them from <code>main()</code>. What genuinely compiles and disassembles is <code>half2_add_kernel</code> itself: a single <code>HADD2</code> instruction, operating on one 32-bit register holding both packed 16-bit values, performing both additions at once. <code>sizeof(half2) = 4</code> confirms the packing directly — two 16-bit floats fit inside the same 4 bytes one ordinary <code>float</code> alone would occupy, which is exactly why a tensor-core matrix tile (Part 6) built from <code>half</code> values can pack twice as many elements into the same register file footprint as an equivalent <code>float</code> tile.</p>
+<blockquote>
+<p><code>[COMMON TRAP]</code> It's easy to read "SIMD" in this chapter's title and assume every mechanism in it works the same way. Sections 5.2 through 5.4 are all genuinely about a <em>warp</em> — 32 threads, SIMT, converging or diverging together — while this section's <code>half2</code> math happens entirely <em>inside one thread</em>, with the warp mechanism not involved at all. A kernel can use both at once (32 threads, each independently doing packed 2-wide <code>half2</code> math) without the two mechanisms interacting — they're stacked, not the same thing wearing two names.</p>
+</blockquote>
+<h2 id="56-complete-runnable-code">5.6 Complete Runnable Code<a class="headerlink" href="#56-complete-runnable-code" title="Permanent link">&para;</a></h2>
+<h3 id="file-01_vectorized_loadscu">File: <code>01_vectorized_loads.cu</code><a class="headerlink" href="#file-01_vectorized_loadscu" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdio&gt;</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="c1">// Scalar: one 4-byte load per thread</span>
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="n">__global__</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="n">load_scalar_kernel</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="kt">float</span><span class="o">*</span><span class="w"> </span><span class="n">in</span><span class="p">,</span><span class="w"> </span><span class="kt">float</span><span class="o">*</span><span class="w"> </span><span class="n">out</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">n</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">blockIdx</span><span class="p">.</span><span class="n">x</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">blockDim</span><span class="p">.</span><span class="n">x</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">threadIdx</span><span class="p">.</span><span class="n">x</span><span class="p">;</span>
+<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">n</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">        </span><span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">in</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mf">2.0f</span><span class="p">;</span>
+<a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="p">}</span>
+<a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a>
+<a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="c1">// Vectorized: one 16-byte (float4) load services what would be 4 threads' worth of scalar loads</span>
+<a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a><span class="n">__global__</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="n">load_vectorized_kernel</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">float4</span><span class="o">*</span><span class="w"> </span><span class="n">in</span><span class="p">,</span><span class="w"> </span><span class="n">float4</span><span class="o">*</span><span class="w"> </span><span class="n">out</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">n4</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">blockIdx</span><span class="p">.</span><span class="n">x</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">blockDim</span><span class="p">.</span><span class="n">x</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">threadIdx</span><span class="p">.</span><span class="n">x</span><span class="p">;</span>
+<a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">n4</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a><span class="w">        </span><span class="n">float4</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">in</span><span class="p">[</span><span class="n">i</span><span class="p">];</span>
+<a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a><span class="w">        </span><span class="n">v</span><span class="p">.</span><span class="n">x</span><span class="w"> </span><span class="o">*=</span><span class="w"> </span><span class="mf">2.0f</span><span class="p">;</span><span class="w"> </span><span class="n">v</span><span class="p">.</span><span class="n">y</span><span class="w"> </span><span class="o">*=</span><span class="w"> </span><span class="mf">2.0f</span><span class="p">;</span><span class="w"> </span><span class="n">v</span><span class="p">.</span><span class="n">z</span><span class="w"> </span><span class="o">*=</span><span class="w"> </span><span class="mf">2.0f</span><span class="p">;</span><span class="w"> </span><span class="n">v</span><span class="p">.</span><span class="n">w</span><span class="w"> </span><span class="o">*=</span><span class="w"> </span><span class="mf">2.0f</span><span class="p">;</span>
+<a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a><span class="w">        </span><span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">;</span>
+<a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-14-19" name="__codelineno-14-19" href="#__codelineno-14-19"></a><span class="p">}</span>
+<a id="__codelineno-14-20" name="__codelineno-14-20" href="#__codelineno-14-20"></a>
+<a id="__codelineno-14-21" name="__codelineno-14-21" href="#__codelineno-14-21"></a><span class="kt">int</span><span class="w"> </span><span class="n">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-14-22" name="__codelineno-14-22" href="#__codelineno-14-22"></a><span class="w">    </span><span class="n">printf</span><span class="p">(</span><span class="s">"sizeof(float4) = %zu bytes (%d floats per vectorized load)</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span>
+<a id="__codelineno-14-23" name="__codelineno-14-23" href="#__codelineno-14-23"></a><span class="w">           </span><span class="k">sizeof</span><span class="p">(</span><span class="n">float4</span><span class="p">),</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="p">)(</span><span class="k">sizeof</span><span class="p">(</span><span class="n">float4</span><span class="p">)</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="k">sizeof</span><span class="p">(</span><span class="kt">float</span><span class="p">)));</span>
+<a id="__codelineno-14-24" name="__codelineno-14-24" href="#__codelineno-14-24"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<a id="__codelineno-14-25" name="__codelineno-14-25" href="#__codelineno-14-25"></a><span class="p">}</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>nvcc<span class="w"> </span>-arch<span class="o">=</span>sm_80<span class="w"> </span>01_vectorized_loads.cu<span class="w"> </span>-o<span class="w"> </span>01_vectorized_loads
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>./01_vectorized_loads
+<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>nvcc<span class="w"> </span>-arch<span class="o">=</span>sm_80<span class="w"> </span>-cubin<span class="w"> </span>01_vectorized_loads.cu<span class="w"> </span>-o<span class="w"> </span>01_vectorized_loads.cubin
+<a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>cuobjdump<span class="w"> </span>--dump-sass<span class="w"> </span>01_vectorized_loads.cubin
+</code></pre></div>
+<p>Produces exactly the output and disassembly shown in Worked Example 5.2.1 above.</p>
+<h3 id="file-02_warp_shuffle_reductioncu">File: <code>02_warp_shuffle_reduction.cu</code><a class="headerlink" href="#file-02_warp_shuffle_reductioncu" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdio&gt;</span>
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="c1">// Warp-level sum reduction using __shfl_down_sync -- no shared memory needed</span>
+<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="n">__global__</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="n">warp_reduce_sum_kernel</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="kt">float</span><span class="o">*</span><span class="w"> </span><span class="n">in</span><span class="p">,</span><span class="w"> </span><span class="kt">float</span><span class="o">*</span><span class="w"> </span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">lane</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">threadIdx</span><span class="p">.</span><span class="n">x</span><span class="p">;</span><span class="w">  </span><span class="c1">// assume exactly one warp: 32 threads</span>
+<a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="w">    </span><span class="kt">float</span><span class="w"> </span><span class="n">val</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">in</span><span class="p">[</span><span class="n">lane</span><span class="p">];</span>
+<a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">offset</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">16</span><span class="p">;</span><span class="w"> </span><span class="n">offset</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">offset</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="w">        </span><span class="n">val</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">__shfl_down_sync</span><span class="p">(</span><span class="mh">0xFFFFFFFF</span><span class="p">,</span><span class="w"> </span><span class="n">val</span><span class="p">,</span><span class="w"> </span><span class="n">offset</span><span class="p">);</span>
+<a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">lane</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="n">out</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">val</span><span class="p">;</span><span class="w">  </span><span class="c1">// lane 0 now holds the full sum</span>
+<a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a><span class="p">}</span>
+<a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a>
+<a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a><span class="c1">// Host-side simulation of the exact same butterfly-reduction the kernel performs,</span>
+<a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a><span class="c1">// lane by lane, with no GPU involved.</span>
+<a id="__codelineno-16-15" name="__codelineno-16-15" href="#__codelineno-16-15"></a><span class="kt">float</span><span class="w"> </span><span class="n">host_simulate_warp_reduce</span><span class="p">(</span><span class="kt">float</span><span class="w"> </span><span class="n">lanes</span><span class="p">[</span><span class="mi">32</span><span class="p">])</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-16-16" name="__codelineno-16-16" href="#__codelineno-16-16"></a><span class="w">    </span><span class="kt">float</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="mi">32</span><span class="p">];</span>
+<a id="__codelineno-16-17" name="__codelineno-16-17" href="#__codelineno-16-17"></a><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">32</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="o">++</span><span class="p">)</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">lanes</span><span class="p">[</span><span class="n">i</span><span class="p">];</span>
+<a id="__codelineno-16-18" name="__codelineno-16-18" href="#__codelineno-16-18"></a><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">offset</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">16</span><span class="p">;</span><span class="w"> </span><span class="n">offset</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">offset</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-16-19" name="__codelineno-16-19" href="#__codelineno-16-19"></a><span class="w">        </span><span class="kt">float</span><span class="w"> </span><span class="n">next</span><span class="p">[</span><span class="mi">32</span><span class="p">];</span>
+<a id="__codelineno-16-20" name="__codelineno-16-20" href="#__codelineno-16-20"></a><span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">lane</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">lane</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">32</span><span class="p">;</span><span class="w"> </span><span class="n">lane</span><span class="o">++</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-16-21" name="__codelineno-16-21" href="#__codelineno-16-21"></a><span class="w">            </span><span class="kt">int</span><span class="w"> </span><span class="n">src</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">lane</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">offset</span><span class="p">;</span>
+<a id="__codelineno-16-22" name="__codelineno-16-22" href="#__codelineno-16-22"></a><span class="w">            </span><span class="kt">float</span><span class="w"> </span><span class="n">shuffled</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">src</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">32</span><span class="p">)</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">src</span><span class="p">]</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="mf">0.0f</span><span class="p">;</span><span class="w">  </span><span class="c1">// shfl_down: lanes past the warp's edge get 0 here</span>
+<a id="__codelineno-16-23" name="__codelineno-16-23" href="#__codelineno-16-23"></a><span class="w">            </span><span class="n">next</span><span class="p">[</span><span class="n">lane</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">lane</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">shuffled</span><span class="p">;</span>
+<a id="__codelineno-16-24" name="__codelineno-16-24" href="#__codelineno-16-24"></a><span class="w">        </span><span class="p">}</span>
+<a id="__codelineno-16-25" name="__codelineno-16-25" href="#__codelineno-16-25"></a><span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">32</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="o">++</span><span class="p">)</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">next</span><span class="p">[</span><span class="n">i</span><span class="p">];</span>
+<a id="__codelineno-16-26" name="__codelineno-16-26" href="#__codelineno-16-26"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-16-27" name="__codelineno-16-27" href="#__codelineno-16-27"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="mi">0</span><span class="p">];</span>
+<a id="__codelineno-16-28" name="__codelineno-16-28" href="#__codelineno-16-28"></a><span class="p">}</span>
+<a id="__codelineno-16-29" name="__codelineno-16-29" href="#__codelineno-16-29"></a>
+<a id="__codelineno-16-30" name="__codelineno-16-30" href="#__codelineno-16-30"></a><span class="kt">int</span><span class="w"> </span><span class="n">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-16-31" name="__codelineno-16-31" href="#__codelineno-16-31"></a><span class="w">    </span><span class="kt">float</span><span class="w"> </span><span class="n">lanes</span><span class="p">[</span><span class="mi">32</span><span class="p">];</span>
+<a id="__codelineno-16-32" name="__codelineno-16-32" href="#__codelineno-16-32"></a><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">32</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="o">++</span><span class="p">)</span><span class="w"> </span><span class="n">lanes</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="kt">float</span><span class="p">)(</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">);</span><span class="w">  </span><span class="c1">// 1, 2, ..., 32</span>
+<a id="__codelineno-16-33" name="__codelineno-16-33" href="#__codelineno-16-33"></a>
+<a id="__codelineno-16-34" name="__codelineno-16-34" href="#__codelineno-16-34"></a><span class="w">    </span><span class="kt">float</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">host_simulate_warp_reduce</span><span class="p">(</span><span class="n">lanes</span><span class="p">);</span>
+<a id="__codelineno-16-35" name="__codelineno-16-35" href="#__codelineno-16-35"></a><span class="w">    </span><span class="kt">float</span><span class="w"> </span><span class="n">closed_form</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">32.0f</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mf">33.0f</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mf">2.0f</span><span class="p">;</span><span class="w">  </span><span class="c1">// sum 1..32</span>
+<a id="__codelineno-16-36" name="__codelineno-16-36" href="#__codelineno-16-36"></a><span class="w">    </span><span class="n">printf</span><span class="p">(</span><span class="s">"host-simulated warp-shuffle sum = %f</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span><span class="w"> </span><span class="n">result</span><span class="p">);</span>
+<a id="__codelineno-16-37" name="__codelineno-16-37" href="#__codelineno-16-37"></a><span class="w">    </span><span class="n">printf</span><span class="p">(</span><span class="s">"closed-form sum(1..32) = n(n+1)/2 = %f</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span><span class="w"> </span><span class="n">closed_form</span><span class="p">);</span>
+<a id="__codelineno-16-38" name="__codelineno-16-38" href="#__codelineno-16-38"></a><span class="w">    </span><span class="n">printf</span><span class="p">(</span><span class="s">"match? %s</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="n">result</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">closed_form</span><span class="p">)</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="s">"true"</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="s">"false"</span><span class="p">);</span>
+<a id="__codelineno-16-39" name="__codelineno-16-39" href="#__codelineno-16-39"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<a id="__codelineno-16-40" name="__codelineno-16-40" href="#__codelineno-16-40"></a><span class="p">}</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>nvcc<span class="w"> </span>-arch<span class="o">=</span>sm_80<span class="w"> </span>02_warp_shuffle_reduction.cu<span class="w"> </span>-o<span class="w"> </span>02_warp_shuffle_reduction
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>./02_warp_shuffle_reduction
+<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>nvcc<span class="w"> </span>-arch<span class="o">=</span>sm_80<span class="w"> </span>-cubin<span class="w"> </span>02_warp_shuffle_reduction.cu<span class="w"> </span>-o<span class="w"> </span>02_warp_shuffle_reduction.cubin
+<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>cuobjdump<span class="w"> </span>--dump-sass<span class="w"> </span>02_warp_shuffle_reduction.cubin
+</code></pre></div>
+<p>Produces exactly the output and disassembly shown in Worked Example 5.3.1 above.</p>
+<h3 id="file-03_warp_vote_ballotcu">File: <code>03_warp_vote_ballot.cu</code><a class="headerlink" href="#file-03_warp_vote_ballotcu" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdio&gt;</span>
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>
+<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="c1">// Every thread tests a per-lane predicate; __ballot_sync packs all 32 results</span>
+<a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="c1">// into a single 32-bit mask, one bit per lane -- CUDA's lane-wise SIMD compare.</span>
+<a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="n">__global__</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="n">ballot_kernel</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="kt">float</span><span class="o">*</span><span class="w"> </span><span class="n">values</span><span class="p">,</span><span class="w"> </span><span class="kt">unsigned</span><span class="w"> </span><span class="kt">int</span><span class="o">*</span><span class="w"> </span><span class="n">out_mask</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">lane</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">threadIdx</span><span class="p">.</span><span class="n">x</span><span class="p">;</span>
+<a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="n">predicate</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">values</span><span class="p">[</span><span class="n">lane</span><span class="p">]</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">10.0f</span><span class="p">;</span>
+<a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="w">    </span><span class="kt">unsigned</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">mask</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">__ballot_sync</span><span class="p">(</span><span class="mh">0xFFFFFFFF</span><span class="p">,</span><span class="w"> </span><span class="n">predicate</span><span class="p">);</span>
+<a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">lane</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="n">out_mask</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">mask</span><span class="p">;</span>
+<a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a><span class="p">}</span>
+<a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a>
+<a id="__codelineno-18-12" name="__codelineno-18-12" href="#__codelineno-18-12"></a><span class="c1">// Host-side simulation of the identical per-lane predicate and the identical</span>
+<a id="__codelineno-18-13" name="__codelineno-18-13" href="#__codelineno-18-13"></a><span class="c1">// bit-packing __ballot_sync performs, with no GPU involved.</span>
+<a id="__codelineno-18-14" name="__codelineno-18-14" href="#__codelineno-18-14"></a><span class="kt">unsigned</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">host_simulate_ballot</span><span class="p">(</span><span class="kt">float</span><span class="w"> </span><span class="n">values</span><span class="p">[</span><span class="mi">32</span><span class="p">])</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-18-15" name="__codelineno-18-15" href="#__codelineno-18-15"></a><span class="w">    </span><span class="kt">unsigned</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">mask</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<a id="__codelineno-18-16" name="__codelineno-18-16" href="#__codelineno-18-16"></a><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">lane</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">lane</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">32</span><span class="p">;</span><span class="w"> </span><span class="n">lane</span><span class="o">++</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-18-17" name="__codelineno-18-17" href="#__codelineno-18-17"></a><span class="w">        </span><span class="kt">bool</span><span class="w"> </span><span class="n">predicate</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">values</span><span class="p">[</span><span class="n">lane</span><span class="p">]</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">10.0f</span><span class="p">;</span>
+<a id="__codelineno-18-18" name="__codelineno-18-18" href="#__codelineno-18-18"></a><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">predicate</span><span class="p">)</span><span class="w"> </span><span class="n">mask</span><span class="w"> </span><span class="o">|=</span><span class="w"> </span><span class="p">(</span><span class="mi">1u</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">lane</span><span class="p">);</span>
+<a id="__codelineno-18-19" name="__codelineno-18-19" href="#__codelineno-18-19"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-18-20" name="__codelineno-18-20" href="#__codelineno-18-20"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">mask</span><span class="p">;</span>
+<a id="__codelineno-18-21" name="__codelineno-18-21" href="#__codelineno-18-21"></a><span class="p">}</span>
+<a id="__codelineno-18-22" name="__codelineno-18-22" href="#__codelineno-18-22"></a>
+<a id="__codelineno-18-23" name="__codelineno-18-23" href="#__codelineno-18-23"></a><span class="kt">int</span><span class="w"> </span><span class="n">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-18-24" name="__codelineno-18-24" href="#__codelineno-18-24"></a><span class="w">    </span><span class="kt">float</span><span class="w"> </span><span class="n">values</span><span class="p">[</span><span class="mi">32</span><span class="p">];</span>
+<a id="__codelineno-18-25" name="__codelineno-18-25" href="#__codelineno-18-25"></a><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">32</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="o">++</span><span class="p">)</span><span class="w"> </span><span class="n">values</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="kt">float</span><span class="p">)</span><span class="n">i</span><span class="p">;</span><span class="w">  </span><span class="c1">// 0, 1, ..., 31</span>
+<a id="__codelineno-18-26" name="__codelineno-18-26" href="#__codelineno-18-26"></a>
+<a id="__codelineno-18-27" name="__codelineno-18-27" href="#__codelineno-18-27"></a><span class="w">    </span><span class="kt">unsigned</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">mask</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">host_simulate_ballot</span><span class="p">(</span><span class="n">values</span><span class="p">);</span>
+<a id="__codelineno-18-28" name="__codelineno-18-28" href="#__codelineno-18-28"></a><span class="w">    </span><span class="n">printf</span><span class="p">(</span><span class="s">"values[lane] = lane index (0..31); predicate: value &gt; 10.0</span><span class="se">\n</span><span class="s">"</span><span class="p">);</span>
+<a id="__codelineno-18-29" name="__codelineno-18-29" href="#__codelineno-18-29"></a><span class="w">    </span><span class="n">printf</span><span class="p">(</span><span class="s">"host-simulated ballot mask = 0x%08X</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span><span class="w"> </span><span class="n">mask</span><span class="p">);</span>
+<a id="__codelineno-18-30" name="__codelineno-18-30" href="#__codelineno-18-30"></a>
+<a id="__codelineno-18-31" name="__codelineno-18-31" href="#__codelineno-18-31"></a><span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">popcount</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<a id="__codelineno-18-32" name="__codelineno-18-32" href="#__codelineno-18-32"></a><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">lane</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">lane</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">32</span><span class="p">;</span><span class="w"> </span><span class="n">lane</span><span class="o">++</span><span class="p">)</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">mask</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="p">(</span><span class="mi">1u</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">lane</span><span class="p">))</span><span class="w"> </span><span class="n">popcount</span><span class="o">++</span><span class="p">;</span>
+<a id="__codelineno-18-33" name="__codelineno-18-33" href="#__codelineno-18-33"></a><span class="w">    </span><span class="n">printf</span><span class="p">(</span><span class="s">"threads satisfying predicate (lanes 11..31) = %d</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span><span class="w"> </span><span class="n">popcount</span><span class="p">);</span>
+<a id="__codelineno-18-34" name="__codelineno-18-34" href="#__codelineno-18-34"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<a id="__codelineno-18-35" name="__codelineno-18-35" href="#__codelineno-18-35"></a><span class="p">}</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>nvcc<span class="w"> </span>-arch<span class="o">=</span>sm_80<span class="w"> </span>03_warp_vote_ballot.cu<span class="w"> </span>-o<span class="w"> </span>03_warp_vote_ballot
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>./03_warp_vote_ballot
+<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>nvcc<span class="w"> </span>-arch<span class="o">=</span>sm_80<span class="w"> </span>-cubin<span class="w"> </span>03_warp_vote_ballot.cu<span class="w"> </span>-o<span class="w"> </span>03_warp_vote_ballot.cubin
+<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>cuobjdump<span class="w"> </span>--dump-sass<span class="w"> </span>03_warp_vote_ballot.cubin
+</code></pre></div>
+<p>Produces exactly the output and disassembly shown in Worked Example 5.4.1 above.</p>
+<h3 id="file-04_half2_simdcu">File: <code>04_half2_simd.cu</code><a class="headerlink" href="#file-04_half2_simdcu" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdio&gt;</span>
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cuda_fp16.h&gt;</span>
+<a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>
+<a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="c1">// Two independent fp16 additions packed into ONE 32-bit register and ONE</span>
+<a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="c1">// instruction -- genuine 2-wide SIMD, not SIMT: both lanes of the half2 are</span>
+<a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="c1">// computed by a single thread, using the hardware's packed-math ALU.</span>
+<a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="n">__global__</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="n">half2_add_kernel</span><span class="p">(</span><span class="n">half2</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="n">half2</span><span class="w"> </span><span class="n">b</span><span class="p">,</span><span class="w"> </span><span class="n">half2</span><span class="o">*</span><span class="w"> </span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a><span class="w">    </span><span class="o">*</span><span class="n">out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">__hadd2</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="n">b</span><span class="p">);</span>
+<a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a><span class="p">}</span>
+<a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a>
+<a id="__codelineno-20-11" name="__codelineno-20-11" href="#__codelineno-20-11"></a><span class="kt">int</span><span class="w"> </span><span class="n">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-20-12" name="__codelineno-20-12" href="#__codelineno-20-12"></a><span class="w">    </span><span class="c1">// __hadd2 and half2 construction are device-only in this toolkit, so the</span>
+<a id="__codelineno-20-13" name="__codelineno-20-13" href="#__codelineno-20-13"></a><span class="w">    </span><span class="c1">// host side here computes an ordinary scalar fp32 reference instead --</span>
+<a id="__codelineno-20-14" name="__codelineno-20-14" href="#__codelineno-20-14"></a><span class="w">    </span><span class="c1">// the same value the kernel's packed add produces, one lane at a time.</span>
+<a id="__codelineno-20-15" name="__codelineno-20-15" href="#__codelineno-20-15"></a><span class="w">    </span><span class="kt">float</span><span class="w"> </span><span class="n">a0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.5f</span><span class="p">,</span><span class="w"> </span><span class="n">a1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">2.5f</span><span class="p">;</span>
+<a id="__codelineno-20-16" name="__codelineno-20-16" href="#__codelineno-20-16"></a><span class="w">    </span><span class="kt">float</span><span class="w"> </span><span class="n">b0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">10.0f</span><span class="p">,</span><span class="w"> </span><span class="n">b1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">20.0f</span><span class="p">;</span>
+<a id="__codelineno-20-17" name="__codelineno-20-17" href="#__codelineno-20-17"></a><span class="w">    </span><span class="n">printf</span><span class="p">(</span><span class="s">"lane 0: a=%.1f b=%.1f a+b=%.1f</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span><span class="w"> </span><span class="n">a0</span><span class="p">,</span><span class="w"> </span><span class="n">b0</span><span class="p">,</span><span class="w"> </span><span class="n">a0</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">b0</span><span class="p">);</span>
+<a id="__codelineno-20-18" name="__codelineno-20-18" href="#__codelineno-20-18"></a><span class="w">    </span><span class="n">printf</span><span class="p">(</span><span class="s">"lane 1: a=%.1f b=%.1f a+b=%.1f</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span><span class="w"> </span><span class="n">a1</span><span class="p">,</span><span class="w"> </span><span class="n">b1</span><span class="p">,</span><span class="w"> </span><span class="n">a1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">b1</span><span class="p">);</span>
+<a id="__codelineno-20-19" name="__codelineno-20-19" href="#__codelineno-20-19"></a><span class="w">    </span><span class="n">printf</span><span class="p">(</span><span class="s">"sizeof(half2) = %zu bytes (two 16-bit lanes packed into one 32-bit register)</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span><span class="w"> </span><span class="k">sizeof</span><span class="p">(</span><span class="n">half2</span><span class="p">));</span>
+<a id="__codelineno-20-20" name="__codelineno-20-20" href="#__codelineno-20-20"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<a id="__codelineno-20-21" name="__codelineno-20-21" href="#__codelineno-20-21"></a><span class="p">}</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>nvcc<span class="w"> </span>-arch<span class="o">=</span>sm_80<span class="w"> </span>04_half2_simd.cu<span class="w"> </span>-o<span class="w"> </span>04_half2_simd
+<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>./04_half2_simd
+<a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>nvcc<span class="w"> </span>-arch<span class="o">=</span>sm_80<span class="w"> </span>-cubin<span class="w"> </span>04_half2_simd.cu<span class="w"> </span>-o<span class="w"> </span>04_half2_simd.cubin
+<a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>cuobjdump<span class="w"> </span>--dump-sass<span class="w"> </span>04_half2_simd.cubin
+</code></pre></div>
+<h3 id="expected-output-for-04_half2_simdcu">Expected Output for <code>04_half2_simd.cu</code><a class="headerlink" href="#expected-output-for-04_half2_simdcu" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>lane 0: a=1.5 b=10.0 a+b=11.5
+<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>lane 1: a=2.5 b=20.0 a+b=22.5
+<a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>sizeof(half2) = 4 bytes (two 16-bit lanes packed into one 32-bit register)
+</code></pre></div>
+<p>Every number in this section was independently verified earlier in this chapter: the disassembly evidence in Worked Examples 5.2.1, 5.3.1, 5.4.1, and 5.5.1, and the host-run numeric checks in <code>02_warp_shuffle_reduction.cu</code> and <code>03_warp_vote_ballot.cu</code>. All four files compile clean under <code>nvcc -arch=sm_80</code>; only <code>01_vectorized_loads.cu</code>, <code>02_warp_shuffle_reduction.cu</code>, and <code>03_warp_vote_ballot.cu</code>'s <code>main()</code> functions are actually run to completion in this no-GPU environment, since none of them launch a kernel — <code>04_half2_simd.cu</code> is compile-and-disassemble evidence only, in the same style as Chapter 3's <code>03_coalescing_kernels.cu</code>, because <code>half2</code> construction and packed arithmetic are device-only in this toolkit.</p>
+<h2 id="chapter-summary">Chapter Summary<a class="headerlink" href="#chapter-summary" title="Permanent link">&para;</a></h2>
+<p>A GPU warp and a CPU SIMD register share the same core idea — one instruction, many lanes — but arrive at it from opposite directions: a SIMD register is inherently, permanently one instruction stream with no notion of per-lane branching, while a warp is 32 genuinely independent threads that the hardware runs together only as long as they agree, falling back to serialized, masked execution the moment they don't. <code>float4</code> gives CUDA's compiler a legal way to move four floats in one instruction instead of four, verified in this chapter by reading <code>LDG.E.128</code> and <code>STG.E.128</code> directly out of disassembled machine code rather than asserting it. <code>__shfl_down_sync</code> moves data directly between a warp's lanes through registers alone, with no shared memory and no <code>__syncthreads()</code>, letting a 32-element sum collapse to one value in exactly five instructions — a butterfly pattern this chapter traced by hand and confirmed against the closed-form <code>n(n+1)/2</code>. <code>__ballot_sync</code> packs 32 threads' boolean predicates into one ordinary 32-bit mask, and its disassembly held a genuine surprise: the underlying <code>VOTE</code> instruction produces both a reduced predicate and a full mask register on every call, regardless of which named intrinsic asked for it, a reminder that a compiled instruction can carry more than its source-level name suggests. And <code>half2</code> packed arithmetic is this chapter's one genuine exception to "GPU SIMD is really SIMT" — two 16-bit values, one register, one <code>HADD2</code> instruction, computed by a single thread with no warp mechanism involved at all, which is exactly the packed-math idea Part 6's tensor cores scale up from two values to an entire matrix tile.</p>
+<h2 id="self-check-questions">Self-Check Questions<a class="headerlink" href="#self-check-questions" title="Permanent link">&para;</a></h2>
+<ol>
+<li>A CPU SIMD register and a GPU warp both claim to execute "one instruction, many lanes." Under what specific circumstance does that claim stop being true for a warp but remain permanently true for a CPU SIMD register?</li>
+<li><code>load_vectorized_kernel</code> processes 1024 floats using 256 threads instead of the 1024 a scalar kernel would need. How many total load instructions does each version issue, and how many bytes does each single load instruction move?</li>
+<li><code>warp_reduce_sum_kernel</code> reduces 32 values to 1 using exactly 5 calls to <code>__shfl_down_sync</code>, with offsets 16, 8, 4, 2, 1. If a warp only had 8 active lanes instead of 32, how many shuffle steps would be needed, and what offsets would they use?</li>
+<li>The disassembly of <code>ballot_kernel</code> shows a <code>VOTE.ANY</code> instruction, even though the source code calls <code>__ballot_sync</code>, not <code>__any_sync</code>. Explain why this is not evidence that the compiler changed the program's behavior.</li>
+<li><code>half2_add_kernel</code> performs two additions in a single <code>HADD2</code> instruction issued by one thread. Explain why this is not the same mechanism as a warp of 32 threads each independently computing one scalar addition, even though both scenarios involve "more than one addition happening at once."</li>
+</ol>
+<h2 id="where-we-go-next">Where We Go Next<a class="headerlink" href="#where-we-go-next" title="Permanent link">&para;</a></h2>
+<p>Part 0 closes here having built, piece by piece, every mechanism the rest of this book's <code>Tensor</code> class depends on: fixed-layout types and the host/device compiler split (Chapter 1), structs with RAII-managed device memory (Chapter 2), Struct-of-Arrays layout for warp-coalesced access (Chapter 3), the thread hierarchy and the broadcast kernel pattern (Chapter 4), and now vectorized loads, warp-level reductions, and packed arithmetic (this chapter). Part 1 starts assembling these into an actual <code>Tensor</code> — the first genuinely new data structure this book builds, rather than a small example illustrating one mechanism at a time.</p>
+<h2 id="worked-solutions">Worked Solutions<a class="headerlink" href="#worked-solutions" title="Permanent link">&para;</a></h2>
+<p><strong>1.</strong> The claim breaks for a warp the moment its 32 threads disagree about which instruction to execute next — a data-dependent branch where some threads take one path and others take another, at which point the hardware serializes the two paths, masking off the inactive threads on each pass (Section 5.1's ASCII diagram). A CPU SIMD register has no mechanism for per-lane branching at all — every lane always executes the exact same instruction stream by construction — so there is no circumstance under which its "one instruction, many lanes" guarantee can break.</p>
+<p><strong>2.</strong> The scalar version issues 1024 load instructions, each moving 4 bytes (one <code>float</code>). The vectorized version issues 256 load instructions, each moving 16 bytes (one <code>float4</code>). Both versions move the identical total number of bytes (<code>1024 × 4 = 4096</code> and <code>256 × 16 = 4096</code>), but the vectorized version does it in one quarter as many separate load instructions.</p>
+<p><strong>3.</strong> An 8-lane warp would need <code>log2(8) = 3</code> shuffle steps, with offsets 4, 2, 1 — each step still halves the number of lanes holding a "live" partial value, exactly as Section 5.3's ASCII diagram traced for 8 lanes: <code>offset=4</code> first, then <code>offset=2</code>, then <code>offset=1</code>, ending with lane 0 holding the full 8-element sum.</p>
+<p><strong>4.</strong> <code>VOTE</code> is a single hardware instruction family with two outputs: a full 32-bit mask register (holding every lane's predicate bit, always computed) and one reduced predicate bit (<code>ANY</code>, <code>ALL</code>, or <code>EQ</code>, selected by the instruction's mode). <code>__ballot_sync</code>'s compiled code reads only the mask-register output and discards the reduced predicate (written to CUDA's unused <code>PT</code> register) — the <code>.ANY</code> in the disassembly names which reduction mode happened to be selected for a value this particular kernel never reads, not a change to what the source code asked for or what value ends up in <code>out_mask[0]</code>.</p>
+<p><strong>5.</strong> A warp of 32 threads computing 32 scalar additions is SIMT: 32 genuinely separate threads, each with its own program counter and registers, that the hardware happens to schedule together — the parallelism lives <em>across threads</em>. <code>half2_add_kernel</code>'s single <code>HADD2</code> instruction performs both of its additions inside <em>one</em> thread's <em>one</em> register, with no other thread involved at all — the parallelism lives inside one instruction's own data width. A kernel could combine both: 32 threads, each independently running <code>HADD2</code> on its own <code>half2</code>, for 64 total additions per warp-instruction — the two mechanisms stack rather than substitute for each other.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../04-gpu-programming-introduction/" class="md-footer__link md-footer__link--prev" aria-label="Previous: 4. GPU Programming Introduction">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                4. GPU Programming Introduction
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../../part1/01-core-tensor-structure/" class="md-footer__link md-footer__link--next" aria-label="Next: 6. The Tensor">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                6. The Tensor
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; 2026 Oluwaseyi Awoga
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/maximumbeings" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.top", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

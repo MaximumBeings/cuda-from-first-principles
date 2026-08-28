@@ -1,0 +1,2924 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Building a GPU-Native Tensor and Autodiff Framework in CUDA C++, One Layer at a Time">
+      
+      
+        <meta name="author" content="Oluwaseyi Awoga">
+      
+      
+      
+        <link rel="prev" href="../05-device-abstraction-layer/">
+      
+      
+        <link rel="next" href="../../part2/01-element-wise-operations/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>11. Memory Management System - CUDA From First Principles — Under Development</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#chapter-11-memory-management-system-shared-ownership-bump-allocation-and-pooling" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="CUDA From First Principles — Under Development" class="md-header__button md-logo" aria-label="CUDA From First Principles — Under Development" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M6 4h12v1h3v2h-3v2h3v2h-3v2h3v2h-3v2h3v2h-3v1H6v-1H3v-2h3v-2H3v-2h3v-2H3V9h3V7H3V5h3zm5 11v3h1v-3zm2 0v3h1v-3zm2 0v3h1v-3z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            CUDA From First Principles — Under Development
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              11. Memory Management System
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="CUDA From First Principles — Under Development" class="md-nav__button md-logo" aria-label="CUDA From First Principles — Under Development" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M6 4h12v1h3v2h-3v2h3v2h-3v2h3v2h-3v2h3v2h-3v1H6v-1H3v-2h3v-2H3v-2h3v-2H3V9h3V7H3V5h3zm5 11v3h1v-3zm2 0v3h1v-3zm2 0v3h1v-3z"/></svg>
+
+    </a>
+    CUDA From First Principles — Under Development
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Part 0 — CUDA Foundations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Part 0 — CUDA Foundations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../part0/01-variables-and-types/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    1. Variables and Types
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../part0/02-struct-design-patterns/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    2. Struct Design Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../part0/03-memory-layout-strategies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3. Memory Layout Strategies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../part0/04-gpu-programming-introduction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    4. GPU Programming Introduction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../part0/05-simd-and-vectorization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    5. SIMD and Vectorization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Part 1 — Core Tensor Infrastructure
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Part 1 — Core Tensor Infrastructure
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../01-core-tensor-structure/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    6. The Tensor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../02-memory-layout-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    7. Memory Layout Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../03-tensor-creation-functions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    8. Tensor Creation Functions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../04-specialized-tensor-types/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    9. Specialized Tensor Types
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../05-device-abstraction-layer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    10. Device Abstraction Layer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    11. Memory Management System
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    11. Memory Management System
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#111-reference-counting-when-more-than-one-owner-needs-the-same-buffer-foundational" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11.1 Reference Counting: When More Than One Owner Needs the Same Buffer [FOUNDATIONAL]
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="11.1 Reference Counting: When More Than One Owner Needs the Same Buffer [FOUNDATIONAL]">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#intuition" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Intuition
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#background" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Background
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#worked-example-1111-the-count-traced-through-three-lifetimes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worked Example 11.1.1 — The count, traced through three lifetimes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#112-arena-based-allocation-trading-individual-frees-for-one-bulk-reset-foundational" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11.2 Arena-Based Allocation: Trading Individual Frees for One Bulk Reset [FOUNDATIONAL]
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="11.2 Arena-Based Allocation: Trading Individual Frees for One Bulk Reset [FOUNDATIONAL]">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#intuition_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Intuition
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#background_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Background
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#worked-example-1121-the-alignment-arithmetic-bit-by-bit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worked Example 11.2.1 — The alignment arithmetic, bit by bit
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#worked-example-1122-a-real-over-capacity-request-in-a-debug-build-and-a-release-build" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worked Example 11.2.2 — A real over-capacity request, in a debug build and a release build
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#113-device-memory-pooling-reuse-instead-of-re-asking-the-driver-foundational" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11.3 Device Memory Pooling: Reuse Instead of Re-Asking the Driver [FOUNDATIONAL]
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="11.3 Device Memory Pooling: Reuse Instead of Re-Asking the Driver [FOUNDATIONAL]">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#intuition_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Intuition
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#background_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Background
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#worked-example-1131-three-steps-one-buffer-climbing-toward-a-hit-rate-of-0667" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worked Example 11.3.1 — Three steps, one buffer, climbing toward a hit rate of 0.667
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#114-raii-patterns-and-the-claim-this-chapters-own-code-doesnt-quite-earn-foundational" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11.4 RAII Patterns and the Claim This Chapter's Own Code Doesn't Quite Earn [FOUNDATIONAL]
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="11.4 RAII Patterns and the Claim This Chapter&#39;s Own Code Doesn&#39;t Quite Earn [FOUNDATIONAL]">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#intuition_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Intuition
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#background_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Background
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#worked-example-1141-releasing-the-same-pointer-twice-genuinely-followed-through" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worked Example 11.4.1 — Releasing the same pointer twice, genuinely followed through
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#115-complete-runnable-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11.5 Complete Runnable Code
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="11.5 Complete Runnable Code">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#file-01_refcounted_buffercu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File: 01_refcounted_buffer.cu
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#file-02_arena_allocatorcu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File: 02_arena_allocator.cu
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#file-02b_arena_overruncu-the-debug-vs-release-divergence-from-worked-example-1122" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File: 02b_arena_overrun.cu — the debug-vs-release divergence from Worked Example 11.2.2
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#file-03_device_memory_poolcu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File: 03_device_memory_pool.cu
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#file-04_raii_and_pointer_safetycu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File: 04_raii_and_pointer_safety.cu
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#chapter-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Chapter Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#self-check-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Self-Check Questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-we-go-next" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where We Go Next
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#worked-solutions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worked Solutions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Part 2 — Basic Tensor Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Part 2 — Basic Tensor Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../part2/01-element-wise-operations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    12. Element-wise Operations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../part2/02-matrix-operations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    13. Matrix Operations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../part2/03-reduction-operations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    14. Reduction Operations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Part 3 — Computational Graph Foundation
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Part 3 — Computational Graph Foundation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../part3/01-graph-node-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    15. Graph Node Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Part 4 — Automatic Differentiation Engine
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Part 4 — Automatic Differentiation Engine
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../part4/01-backward-function-implementation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    16. Backward Function Implementation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../part4/02-gradient-computation-engine/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    17. Gradient Computation Engine
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Part 5 — GPU Acceleration and Performance
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Part 5 — GPU Acceleration and Performance
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../part5/01-gpu-kernel-implementation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    18. GPU Kernel Implementation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../part5/02-performance-optimization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    19. Performance Optimization Techniques
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Part 6 — Neural Network Building Blocks
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Part 6 — Neural Network Building Blocks
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../part6/01-neural-network-layers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    20. Neural Network Layers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../part6/02-advanced-features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    21. Advanced Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Part 7 — Financial Computing Applications
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Part 7 — Financial Computing Applications
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../part7/01-quantitative-finance-examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    22. Quantitative Finance Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Appendix
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../appendix/installation-setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    A. Installation & Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../appendix/practice-quiz/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    B. Practice Quiz
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#111-reference-counting-when-more-than-one-owner-needs-the-same-buffer-foundational" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11.1 Reference Counting: When More Than One Owner Needs the Same Buffer [FOUNDATIONAL]
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="11.1 Reference Counting: When More Than One Owner Needs the Same Buffer [FOUNDATIONAL]">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#intuition" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Intuition
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#background" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Background
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#worked-example-1111-the-count-traced-through-three-lifetimes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worked Example 11.1.1 — The count, traced through three lifetimes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#112-arena-based-allocation-trading-individual-frees-for-one-bulk-reset-foundational" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11.2 Arena-Based Allocation: Trading Individual Frees for One Bulk Reset [FOUNDATIONAL]
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="11.2 Arena-Based Allocation: Trading Individual Frees for One Bulk Reset [FOUNDATIONAL]">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#intuition_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Intuition
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#background_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Background
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#worked-example-1121-the-alignment-arithmetic-bit-by-bit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worked Example 11.2.1 — The alignment arithmetic, bit by bit
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#worked-example-1122-a-real-over-capacity-request-in-a-debug-build-and-a-release-build" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worked Example 11.2.2 — A real over-capacity request, in a debug build and a release build
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#113-device-memory-pooling-reuse-instead-of-re-asking-the-driver-foundational" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11.3 Device Memory Pooling: Reuse Instead of Re-Asking the Driver [FOUNDATIONAL]
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="11.3 Device Memory Pooling: Reuse Instead of Re-Asking the Driver [FOUNDATIONAL]">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#intuition_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Intuition
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#background_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Background
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#worked-example-1131-three-steps-one-buffer-climbing-toward-a-hit-rate-of-0667" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worked Example 11.3.1 — Three steps, one buffer, climbing toward a hit rate of 0.667
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#114-raii-patterns-and-the-claim-this-chapters-own-code-doesnt-quite-earn-foundational" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11.4 RAII Patterns and the Claim This Chapter's Own Code Doesn't Quite Earn [FOUNDATIONAL]
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="11.4 RAII Patterns and the Claim This Chapter&#39;s Own Code Doesn&#39;t Quite Earn [FOUNDATIONAL]">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#intuition_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Intuition
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#background_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Background
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#worked-example-1141-releasing-the-same-pointer-twice-genuinely-followed-through" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worked Example 11.4.1 — Releasing the same pointer twice, genuinely followed through
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#115-complete-runnable-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11.5 Complete Runnable Code
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="11.5 Complete Runnable Code">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#file-01_refcounted_buffercu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File: 01_refcounted_buffer.cu
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#file-02_arena_allocatorcu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File: 02_arena_allocator.cu
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#file-02b_arena_overruncu-the-debug-vs-release-divergence-from-worked-example-1122" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File: 02b_arena_overrun.cu — the debug-vs-release divergence from Worked Example 11.2.2
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#file-03_device_memory_poolcu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File: 03_device_memory_pool.cu
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#file-04_raii_and_pointer_safetycu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File: 04_raii_and_pointer_safety.cu
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#chapter-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Chapter Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#self-check-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Self-Check Questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-we-go-next" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where We Go Next
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#worked-solutions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worked Solutions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="chapter-11-memory-management-system-shared-ownership-bump-allocation-and-pooling">Chapter 11: Memory Management System — Shared Ownership, Bump Allocation, and Pooling<a class="headerlink" href="#chapter-11-memory-management-system-shared-ownership-bump-allocation-and-pooling" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p>"Chapter 6 gave every tensor exactly one owner, and one place — its destructor — where that owner's buffers get freed. That rule is simple, correct, and too rigid for what's coming: a computational graph that needs a tensor's buffer visible from two places at once. This chapter is where 'exactly one owner' becomes 'as many owners as the graph needs, safely' — and where two of the three new tricks that make that possible turn out to have a real gap of their own, genuinely demonstrated rather than merely claimed."</p>
+</blockquote>
+<p><strong>What you will understand by the end of this chapter:</strong></p>
+<ul>
+<li><code>RefCountedBuffer&lt;T&gt;</code>: genuine shared ownership, where <em>any</em> of several live copies can validly be the one whose destructor actually frees the memory — a real generalization of Chapter 6's single-owner <code>Tensor</code> and Chapter 7.2's non-owning <code>TensorView</code>, not just a variation on either</li>
+<li>The bump-pointer <code>Arena</code>: why its 256-byte alignment arithmetic is correct as written (and why 256, not some other number, ties directly back to <code>cudaMalloc</code>'s own alignment guarantee from Chapter 7.3, genuinely exercised in Chapter 10.2), and a genuinely compiled, genuinely run comparison of its one safety check — <code>assert</code> — succeeding in a debug build and silently vanishing in a release build, the build configuration a real training run would actually use</li>
+<li><code>DeviceMemoryPool</code>'s size-classed free list, traced through three acquire/release cycles to a <code>2/3</code> hit rate, plus a destructor this struct never got — genuinely measured, via a tracked-allocation counter, to leak exactly one outstanding buffer for as long as the pool lives</li>
+<li>A genuine double-release bug: releasing the same raw pointer twice compiles and runs without complaint, and silently hands the <em>same</em> address back out to two unrelated callers — demonstrated with real, printed, identical pointer values, not just described as a risk</li>
+</ul>
+<p><strong>What you need to know first:</strong></p>
+<ul>
+<li>Chapter 6 (<code>Tensor</code>'s RAII pattern: construction allocates, destruction frees, exactly once)</li>
+<li>Chapter 7.2 (<code>TensorView</code>, this chapter's direct sibling — a view that never owns, versus <code>RefCountedBuffer</code>, a buffer that any of several copies might own)</li>
+<li>Chapter 7.3 and Chapter 10.2 (the 256-byte alignment <code>cudaMalloc</code> guarantees, and the alignment gap already found in <code>DeviceAwareAllocator</code>'s host fallback — <code>Arena</code>'s alignment choice in this chapter is that same guarantee, applied deliberately rather than lost by accident)</li>
+<li>Chapter 2.4 (constructors, destructors, and why every buffer-owning struct in this book pairs an allocation with an explicit free)</li>
+</ul>
+<h2 id="111-reference-counting-when-more-than-one-owner-needs-the-same-buffer-foundational">11.1 Reference Counting: When More Than One Owner Needs the Same Buffer <code>[FOUNDATIONAL]</code><a class="headerlink" href="#111-reference-counting-when-more-than-one-owner-needs-the-same-buffer-foundational" title="Permanent link">&para;</a></h2>
+<h3 id="intuition">Intuition<a class="headerlink" href="#intuition" title="Permanent link">&para;</a></h3>
+<p>Two roommates share a one-bedroom apartment. Neither individually decides when the lease ends — the landlord only reclaims the apartment once <em>both</em> have moved out, and it doesn't matter which one happens to hand back the last key. Chapter 6's <code>Tensor</code> doesn't work this way: it has exactly one owner for the whole of its lifetime, full stop. <code>RefCountedBuffer&lt;T&gt;</code> is the roommate arrangement instead — a small shared counter, allocated alongside the data, that every copy increments on arrival and decrements on departure, so that <em>whichever</em> copy happens to go out of scope last is correctly the one that frees the memory, without any copy needing to know in advance which one that will be.</p>
+<h3 id="background">Background<a class="headerlink" href="#background" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">T</span><span class="o">&gt;</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="k">struct</span><span class="w"> </span><span class="nc">RefCountedBuffer</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span><span class="n">T</span><span class="o">*</span><span class="w"> </span><span class="n">data</span><span class="p">;</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">    </span><span class="kt">int</span><span class="o">*</span><span class="w"> </span><span class="n">refcount</span><span class="p">;</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">count</span><span class="p">;</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="p">};</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Chapter 6 <code>Tensor</code></th>
+<th>Chapter 7.2 <code>TensorView</code></th>
+<th><code>RefCountedBuffer&lt;T&gt;</code> (this chapter)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>How many owners at once</td>
+<td>exactly one</td>
+<td>zero — a view never owns</td>
+<td>any number, tracked live</td>
+</tr>
+<tr>
+<td>Who frees the memory</td>
+<td>the one owning <code>Tensor</code></td>
+<td>nobody — the viewed <code>Tensor</code> still owns it</td>
+<td>whichever copy's destructor sees the count hit zero</td>
+</tr>
+<tr>
+<td>Cost per copy</td>
+<td>not copyable (Chapter 6.5's deleted copy constructor)</td>
+<td>one pointer/shape/stride copy, no allocation</td>
+<td>one shared-memory increment</td>
+</tr>
+<tr>
+<td>Cost per destruction</td>
+<td>one <code>cudaFree</code>/<code>free</code> pair</td>
+<td>none — nothing to free</td>
+<td>one shared-memory decrement plus a zero check</td>
+</tr>
+</tbody>
+</table>
+<p><code>RefCountedBuffer&lt;T&gt;</code>'s own data buffer is allocated here with <code>malloc</code>, not <code>cudaMalloc</code> — for a real device-resident <code>Tensor</code> buffer this mechanism would wrap <code>cudaMalloc</code>/<code>cudaFree</code> exactly as Chapter 6 does, but Chapter 10 already established that a genuine <code>cudaMalloc</code> call fails immediately in this no-GPU sandbox. Using <code>malloc</code> here lets the actual refcounting arithmetic — the part this section is about — genuinely construct, copy, and destruct end to end, rather than being simulated.</p>
+<h3 id="worked-example-1111-the-count-traced-through-three-lifetimes">Worked Example 11.1.1 — The count, traced through three lifetimes<a class="headerlink" href="#worked-example-1111-the-count-traced-through-three-lifetimes" title="Permanent link">&para;</a></h3>
+<p><code>RefCountedBuffer&lt;float&gt; t(4)</code> allocates the buffer and sets <code>*refcount = 1</code>. Entering an inner scope and copy-constructing <code>RefCountedBuffer&lt;float&gt; v(t)</code> gives <code>v</code> the <em>same</em> <code>data</code> and <code>refcount</code> pointers as <code>t</code> (not copies of the data itself) and increments the shared count to <code>2</code>. When <code>v</code> goes out of scope first, its destructor decrements the count to <code>1</code>; since <code>1 != 0</code>, the buffer survives — <code>t</code>'s own copy of that same <code>refcount</code> pointer reads the identical <code>1</code>. Only when <code>t</code> itself later goes out of scope does its destructor decrement the count to <code>0</code> and actually free both <code>data</code> and <code>refcount</code>. Neither <code>t</code> nor <code>v</code> ever checked whether the other was still alive — the shared integer they both point at carried that information for both of them.</p>
+<p>Compiled and run exactly as described:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>nvcc<span class="w"> </span>-arch<span class="o">=</span>sm_80<span class="w"> </span>01_refcounted_buffer.cu<span class="w"> </span>-o<span class="w"> </span>01_refcounted_buffer
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>./01_refcounted_buffer
+</code></pre></div>
+<p>Genuinely compiled and run:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>=== Section 11.1: RefCountedBuffer, traced through three lifetimes ===
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>  RefCountedBuffer(count=4) constructed -&gt; refcount=1
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>t.refcount() = 1
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>  copy constructed (shares buffer) -&gt; refcount=2
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>v.refcount() = 2, t.refcount() = 2
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>  destructor ran -&gt; refcount=1
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>after v goes out of scope, t.refcount() = 1
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>  destructor ran -&gt; refcount=0
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>  refcount hit 0 -&gt; freeing data and refcount
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>after t goes out of scope, buffer has been freed
+</code></pre></div>
+<p>The trace lands exactly on <code>1 -&gt; 2 -&gt; 1 -&gt; 0</code>, with the "freeing" message printed from inside the destructor call that actually observes the zero — genuinely the <em>second</em> of the two live copies' destructors to run, which in this scope happens to be <code>t</code>'s, precisely because <code>v</code>'s inner scope ends first.</p>
+<blockquote>
+<p><code>[COMMON TRAP]</code> Chapter 7.2's <code>TensorView</code> is the direct consumer this struct exists for — a view built from a <code>RefCountedBuffer</code>-backed tensor can report the shared refcount for exactly as long as any view is alive, and the underlying allocation only frees once every view and the owning tensor have each run their own destructor. But the copy constructor above copies <code>other.count</code> directly, meaning every share of a <code>RefCountedBuffer&lt;T&gt;</code> reports the <em>same</em> element count as whatever it was copied from. This struct can express "two things looking at the exact same whole buffer," but has no field at all for "a view of just the first ten elements of a hundred-element buffer, sharing that one allocation." That finer-grained slicing — an independent length and offset layered on top of a shared buffer — is exactly what Chapter 7.2's <code>TensorView</code> (shape, strides, and a raw pointer, no ownership of its own) adds on top; <code>RefCountedBuffer&lt;T&gt;</code> on its own only ever hands out whole-buffer aliases.</p>
+</blockquote>
+<h2 id="112-arena-based-allocation-trading-individual-frees-for-one-bulk-reset-foundational">11.2 Arena-Based Allocation: Trading Individual Frees for One Bulk Reset <code>[FOUNDATIONAL]</code><a class="headerlink" href="#112-arena-based-allocation-trading-individual-frees-for-one-bulk-reset-foundational" title="Permanent link">&para;</a></h2>
+<h3 id="intuition_1">Intuition<a class="headerlink" href="#intuition_1" title="Permanent link">&para;</a></h3>
+<p>A coat check that issues a numbered tag for every coat, and requires that exact tag back before releasing it, does real bookkeeping on every single coat, all night. A coat check that instead says "we close at midnight, and every coat gets returned in one pass, whatever order they show up in" does none of that per-coat bookkeeping at all — it only needs to know where the coats end and the empty space begins. <code>Arena</code> is the second kind of coat check applied to memory: instead of tracking each allocation's lifetime individually (as <code>RefCountedBuffer&lt;T&gt;</code> does), it hands out increasing offsets into one big pre-allocated slab with nothing more than addition, and reclaims <em>everything</em> at once with a single <code>reset()</code> — appropriate exactly when every allocation in a batch is known to die together, the way a whole training step's intermediate activations do.</p>
+<h3 id="background_1">Background<a class="headerlink" href="#background_1" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">struct</span><span class="w"> </span><span class="nc">Arena</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">    </span><span class="kt">uint8_t</span><span class="o">*</span><span class="w"> </span><span class="n">base</span><span class="p">;</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="kt">size_t</span><span class="w"> </span><span class="n">capacity</span><span class="p">;</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span><span class="kt">size_t</span><span class="w"> </span><span class="n">offset</span><span class="p">;</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="p">};</span>
+</code></pre></div>
+<p><code>alloc&lt;T&gt;(count)</code> computes <code>bytes_needed = count * sizeof(T)</code>, rounds <code>offset</code> up to the next 256-byte boundary with <code>(offset + 255) &amp; ~size_t(255)</code>, checks the result still fits inside <code>capacity</code> via <code>assert</code>, and advances <code>offset</code> past the new allocation. <code>reset()</code> is one line: <code>offset = 0</code>. Nothing here does a per-allocation free; everything is reclaimed at once when the arena resets or is dropped.</p>
+<p>The 256-byte figure is not an arbitrary round number: it is the exact alignment <code>cudaMalloc</code> itself guarantees (Chapter 7.3), the same guarantee Chapter 10.2 found <code>DeviceAwareAllocator</code>'s host fallback silently drops. An <code>Arena</code>-backed buffer handed to a kernel expecting that alignment — say, one of Chapter 5.2's vectorized <code>float4</code> loads — genuinely gets it, by construction, rather than by accident.</p>
+<h3 id="worked-example-1121-the-alignment-arithmetic-bit-by-bit">Worked Example 11.2.1 — The alignment arithmetic, bit by bit<a class="headerlink" href="#worked-example-1121-the-alignment-arithmetic-bit-by-bit" title="Permanent link">&para;</a></h3>
+<p><code>(offset + 255) &amp; ~255</code> is the standard round-up-to-a-power-of-two-boundary idiom: adding <code>255</code> (one less than the 256-byte alignment) pushes any offset that isn't already a multiple of 256 up into the next block, and <code>&amp; ~255</code> (clearing the low 8 bits) rounds back down to that block's start — landing exactly on the next multiple of 256 at or above the original offset. Traced against this chapter's own numbers: first request, <code>offset = 0</code>, wants <code>100</code> <code>float</code>s (<code>400</code> bytes) — <code>(0 + 255) &amp; ~255 = 255 &amp; ~255</code>. <code>255</code> has only its low 8 bits set, so clearing those 8 bits leaves <code>0</code>. Already aligned; the allocation runs from byte <code>0</code> to byte <code>400</code>, and <code>offset</code> becomes <code>400</code>. Second request, <code>50</code> more <code>float</code>s (<code>200</code> bytes): <code>(400 + 255) &amp; ~255 = 655 &amp; ~255</code>. <code>655 = 2×256 + 143</code>, so clearing the low 8 bits drops the <code>143</code> and leaves <code>512</code> — the allocation runs from <code>512</code> to <code>712</code>, having quietly skipped <code>512 - 400 = 112</code> bytes of padding to land on the boundary.</p>
+<p>Compiled and run exactly as described:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>nvcc<span class="w"> </span>-arch<span class="o">=</span>sm_80<span class="w"> </span>02_arena_allocator.cu<span class="w"> </span>-o<span class="w"> </span>02_arena_allocator
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>./02_arena_allocator
+</code></pre></div>
+<p>Genuinely compiled and run:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>=== Section 11.2: Arena, alignment arithmetic traced by hand ===
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>after alloc&lt;float&gt;(100): offset=400 (expected 400)
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>after alloc&lt;float&gt;(50):  offset=712 (expected 712)
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>second allocation's aligned start = 512, padding skipped = 112
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>after reset(): offset=0
+</code></pre></div>
+<h3 id="worked-example-1122-a-real-over-capacity-request-in-a-debug-build-and-a-release-build">Worked Example 11.2.2 — A real over-capacity request, in a debug build and a release build<a class="headerlink" href="#worked-example-1122-a-real-over-capacity-request-in-a-debug-build-and-a-release-build" title="Permanent link">&para;</a></h3>
+<p>That <code>112</code>-byte gap is the price of alignment, and it's bounded: rounding up to a 256-byte boundary can never waste more than <code>255</code> bytes on any single allocation, regardless of how many allocations came before it. Compare that fixed, small, per-allocation ceiling to <code>RefCountedBuffer&lt;T&gt;</code>'s cost model from Section 11.1 — a shared-memory increment and decrement on every copy and every destruction — and <code>Arena::alloc</code> touches none of that: one addition, one bitwise mask, one bounds check, and pointer arithmetic. That's the entire reason a training step with thousands of small per-layer allocations reaches for this structure instead of <code>RefCountedBuffer&lt;T&gt;</code> or a general-purpose allocator.</p>
+<p><code>assert(aligned_offset + bytes_needed &lt;= capacity &amp;&amp; "Arena exhausted")</code> is the <em>only</em> bounds check <code>alloc()</code> performs, and — unlike Mojo's <code>debug_assert</code>, which this chapter's design is directly ported from — C++'s <code>assert</code> macro has a genuinely testable, compiler-enforced on/off switch: defining <code>NDEBUG</code> (the flag a release build configuration typically sets) makes the preprocessor strip every <code>assert(...)</code> call to nothing, before the compiler ever sees it. Rather than narrate that difference, it's compiled both ways here and run both ways, against the identical over-capacity request: an <code>800</code>-byte <code>Arena</code> asked to hold <code>1000</code> <code>float</code>s (<code>4000</code> bytes).</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># debug build: assert compiled in</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>nvcc<span class="w"> </span>-arch<span class="o">=</span>sm_80<span class="w"> </span>02b_arena_overrun.cu<span class="w"> </span>-o<span class="w"> </span>02b_debug
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>./02b_debug
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"exit code: </span><span class="nv">$?</span><span class="s2">"</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="c1"># release build: NDEBUG strips the assert entirely</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>nvcc<span class="w"> </span>-arch<span class="o">=</span>sm_80<span class="w"> </span>-DNDEBUG<span class="w"> </span>02b_arena_overrun.cu<span class="w"> </span>-o<span class="w"> </span>02b_release
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>./02b_release
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"exit code: </span><span class="nv">$?</span><span class="s2">"</span>
+</code></pre></div>
+<p>Genuinely compiled and run, both ways:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>--- DEBUG BUILD (assert active) ---
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>02b_debug: 02b_arena_overrun.cu:20: T* Arena::alloc(int) [with T = float]: Assertion `aligned_offset + bytes_needed &lt;= capacity &amp;&amp; "Arena exhausted"' failed.
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>Aborted
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>exit code: 134
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>--- RELEASE BUILD (nvcc -DNDEBUG, assert compiled out) ---
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>=== requesting far more than an 800-byte arena's capacity ===
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>alloc did not abort. pointer offset from base = 0 bytes (arena capacity = 800)
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>writing through the returned pointer now (this touches memory past the arena)...
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>wrote p[0] = 3.140000 without any detected error
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>exit code: 0
+</code></pre></div>
+<p>Two genuinely different binaries, compiled from the identical source, given the identical over-capacity request: the debug build aborts with <code>SIGABRT</code> (exit code <code>134</code>) and a clear diagnostic naming the exact assertion that failed; the release build — the configuration an actual training run compiles with, since <code>assert</code> overhead in a hot allocation path is exactly the kind of cost a release build is built to shed — proceeds silently, hands back a pointer whose bookkeeping already exceeds the arena's declared capacity, and lets a write through it succeed with <code>wrote p[0] = 3.140000</code> and no detected error at all. (That write didn't crash or corrupt this run's own output only because <code>malloc</code>'s actual heap block backing <code>base</code> is typically larger than the <code>800</code> bytes requested, giving a small write past the arena's <em>logical</em> end some slack before it reaches memory malloc doesn't own; a larger overrun, a different allocator, or a real device buffer with no such slack would fail far less quietly. Either way, nothing in this code path — in release mode — ever notices the request exceeded capacity in the first place.)</p>
+<blockquote>
+<p><code>[COMMON TRAP]</code> "Arena exhausted" is a debug-build-only promise. <code>assert</code> is exactly the kind of check that feels like production-grade capacity enforcement — it has a clear message, it's checked on every call, it fires reliably in testing — right up until the build configuration changes underneath it. Nothing about <code>Arena</code>'s own code signals this; it's only visible by treating <code>assert</code> as what it actually is (a development-time aid, stripped by <code>NDEBUG</code>) rather than as a guarantee that survives into the build a real training run uses.</p>
+</blockquote>
+<h2 id="113-device-memory-pooling-reuse-instead-of-re-asking-the-driver-foundational">11.3 Device Memory Pooling: Reuse Instead of Re-Asking the Driver <code>[FOUNDATIONAL]</code><a class="headerlink" href="#113-device-memory-pooling-reuse-instead-of-re-asking-the-driver-foundational" title="Permanent link">&para;</a></h2>
+<h3 id="intuition_2">Intuition<a class="headerlink" href="#intuition_2" title="Permanent link">&para;</a></h3>
+<p>A construction site that rents a specific size of scaffolding for every job, returns it when the job's done, and rents an identical size again the very next week, is paying a rental company's overhead twice for equipment it could have simply kept on-site between jobs. <code>DeviceMemoryPool</code> is the "keep it on-site" version for device buffers: instead of returning memory to the driver the moment a step finishes (a <code>cudaFree</code>/<code>cudaMalloc</code> round trip is one to three orders of magnitude slower than a host allocation, when a driver actually exists to round-trip to), it holds released buffers in a free list, bucketed by exact element count, ready to hand the <em>same</em> buffer straight back out the next time something asks for that exact size — which, across steps that repeat the same layer shapes every iteration, is most of the time.</p>
+<h3 id="background_2">Background<a class="headerlink" href="#background_2" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="k">struct</span><span class="w"> </span><span class="nc">DeviceMemoryPool</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">unordered_map</span><span class="o">&lt;</span><span class="kt">int</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="kt">float</span><span class="o">*&gt;&gt;</span><span class="w"> </span><span class="n">free_lists</span><span class="p">;</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">    </span><span class="kt">long</span><span class="w"> </span><span class="n">bytes_allocated</span><span class="p">;</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span><span class="kt">long</span><span class="w"> </span><span class="n">bytes_reused</span><span class="p">;</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="p">};</span>
+</code></pre></div>
+<p><code>acquire(count)</code> checks whether <code>free_lists[count]</code> has anything in it; if so, it pops and returns an existing buffer (<code>bytes_reused += count * 4</code>) instead of asking the driver for new memory. Otherwise it allocates fresh (<code>bytes_allocated += count * 4</code>). <code>release(ptr, count)</code> never frees anything — it appends <code>ptr</code> to the free list for that size, keeping it available for the next <code>acquire</code> of the same count. In this sandbox, "allocates fresh" genuinely routes through a tracked stand-in for <code>cudaMalloc</code> — a small wrapper that increments a global outstanding-allocation counter on every call and decrements it on every genuine free — precisely so that this section's coming leak isn't only asserted, but actually counted.</p>
+<h3 id="worked-example-1131-three-steps-one-buffer-climbing-toward-a-hit-rate-of-0667">Worked Example 11.3.1 — Three steps, one buffer, climbing toward a hit rate of <code>0.667</code><a class="headerlink" href="#worked-example-1131-three-steps-one-buffer-climbing-toward-a-hit-rate-of-0667" title="Permanent link">&para;</a></h3>
+<p>Step 1 requests a <code>256</code>-element buffer: the free list for size <code>256</code> is empty, so the pool allocates fresh (<code>bytes_allocated = 256 × 4 = 1024</code>) and hands it out; at the end of the step it's released back, not freed, leaving one entry in that size's free list. Step 2 requests another <code>256</code>-element buffer: the free list isn't empty this time, so the pool pops that <em>same</em> buffer and reuses it (<code>bytes_reused = 1024</code>) instead of touching the allocator again. Step 3: identical story, <code>bytes_reused = 2048</code>. After three steps, <code>hit_rate() = bytes_reused / (bytes_allocated + bytes_reused) = 2048 / 3072 = 0.667</code> — and every further step that requests the same <code>256</code>-element size reuses the same buffer yet again, pushing the ratio toward <code>1.0</code> as training continues, since real training loops request the same handful of activation shapes on every iteration.</p>
+<p>Compiled and run exactly as described:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>nvcc<span class="w"> </span>-arch<span class="o">=</span>sm_80<span class="w"> </span>03_device_memory_pool.cu<span class="w"> </span>-o<span class="w"> </span>03_device_memory_pool
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>./03_device_memory_pool
+</code></pre></div>
+<p>Genuinely compiled and run:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>=== Section 11.3: DeviceMemoryPool, three steps toward a hit rate ===
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>step 1: acquire(256) -&gt; fresh allocation. bytes_allocated=1024 bytes_reused=0
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>step 2: acquire(256) -&gt; reused? true (same pointer). bytes_allocated=1024 bytes_reused=1024
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>step 3: acquire(256) -&gt; reused? true (same pointer). bytes_allocated=1024 bytes_reused=2048
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>hit_rate() = 2048 / 3072 = 0.667
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>g_outstanding_allocations while pool is still alive = 1
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>g_outstanding_allocations after pool went out of scope = 1 (expected: still 1, not 0)
+</code></pre></div>
+<p>Every pointer comparison across the three steps genuinely reports <code>true</code> — <code>acquire</code> really does hand back the identical address each time — and the hit rate lands exactly on <code>0.667</code>, matching the hand trace above.</p>
+<blockquote>
+<p><code>[COMMON TRAP]</code> <code>DeviceMemoryPool</code> has no destructor — it leaks every buffer it ever allocates, for the pool's entire lifetime, and this run just measured it rather than merely claiming it. Look for a destructor on <code>DeviceMemoryPool</code> above and there isn't one — the compiler synthesizes a default, member-wise destructor for a struct that defines none, meaning when a <code>DeviceMemoryPool</code> goes out of scope, its <code>free_lists</code> map and its two <code>long</code> counters are each torn down using their own types' destruction rules. <code>std::unordered_map</code> and <code>std::vector</code>'s own destructors correctly free the <em>bookkeeping</em> structures — the hash table, the array of pointer values sitting inside each free list — but a raw <code>float*</code> has no automatic freeing behavior at all (exactly why every other allocating struct in this book, <code>Arena</code> and <code>RefCountedBuffer&lt;T&gt;</code> included, explicitly frees its buffer in its own destructor). Freeing a <code>std::vector&lt;float*&gt;</code> frees the vector's own backing array — the slots that held the addresses — never the memory each address actually points to. The single buffer this pool ever created and never handed back out again before the pool itself went out of scope is gone, in the sense that nothing can reach it anymore, while <code>g_outstanding_allocations</code> above shows the memory it occupies was never actually freed: it reads <code>1</code> before the pool's scope ends and <em>still</em> reads <code>1</code> afterward — a textbook leak, measured rather than assumed, and one that directly contradicts the claim Section 11.4 is about to make one paragraph later in this very chapter.</p>
+</blockquote>
+<h2 id="114-raii-patterns-and-the-claim-this-chapters-own-code-doesnt-quite-earn-foundational">11.4 RAII Patterns and the Claim This Chapter's Own Code Doesn't Quite Earn <code>[FOUNDATIONAL]</code><a class="headerlink" href="#114-raii-patterns-and-the-claim-this-chapters-own-code-doesnt-quite-earn-foundational" title="Permanent link">&para;</a></h2>
+<h3 id="intuition_3">Intuition<a class="headerlink" href="#intuition_3" title="Permanent link">&para;</a></h3>
+<p>Every allocating struct so far in this book has followed one rule: acquire the resource in the constructor, release it in the destructor, and let the compiler's ordinary object-lifetime rules make sure that pairing actually happens. This section states that rule as the chapter's closing claim — and is the right place to check whether every struct in the chapter actually lives up to it, the way this book has checked every "compiled once, cached, reused"-style claim before it.</p>
+<h3 id="background_3">Background<a class="headerlink" href="#background_3" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="kt">void</span><span class="w"> </span><span class="nf">training_step</span><span class="p">(</span><span class="n">DeviceMemoryPool</span><span class="o">&amp;</span><span class="w"> </span><span class="n">pool</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">count</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="w">    </span><span class="kt">float</span><span class="o">*</span><span class="w"> </span><span class="n">activations</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pool</span><span class="p">.</span><span class="n">acquire</span><span class="p">(</span><span class="n">count</span><span class="p">);</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">    </span><span class="c1">// ... forward + backward pass using `activations` ...</span>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">    </span><span class="n">pool</span><span class="p">.</span><span class="n">release</span><span class="p">(</span><span class="n">activations</span><span class="p">,</span><span class="w"> </span><span class="n">count</span><span class="p">);</span>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">    </span><span class="c1">// activations is not read again after this line -- but nothing in</span>
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">    </span><span class="c1">// release()'s signature actually stops that from compiling.</span>
+<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="p">}</span>
+</code></pre></div>
+<p>The natural claim to make about this pattern is: "every allocator in this chapter follows the same rule Chapter 6's <code>Tensor</code> established — acquisition happens in the constructor, release happens in the destructor, and there is no code path that can leak or alias a resource." Section 11.3 already found the first half of that false for <code>DeviceMemoryPool</code>. This section checks the second half directly, against <code>release()</code>'s actual signature: <code>void release(float* ptr, int count)</code> takes <code>ptr</code> as an ordinary pointer parameter — copying an address, not consuming or moving out of the caller's variable the way an owning parameter would. A raw pointer in C++ is, by design, trivially copyable and carries no ownership information at all; nothing at the type-system level prevents <code>activations</code> from being read again after <code>release()</code>, prevents calling <code>release()</code> a second time on the same pointer, or prevents <code>acquire()</code> handing that same address back out to two unrelated callers.</p>
+<h3 id="worked-example-1141-releasing-the-same-pointer-twice-genuinely-followed-through">Worked Example 11.4.1 — Releasing the same pointer twice, genuinely followed through<a class="headerlink" href="#worked-example-1141-releasing-the-same-pointer-twice-genuinely-followed-through" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="kt">float</span><span class="o">*</span><span class="w"> </span><span class="n">activations</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pool</span><span class="p">.</span><span class="n">acquire</span><span class="p">(</span><span class="mi">128</span><span class="p">);</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">pool</span><span class="p">.</span><span class="n">release</span><span class="p">(</span><span class="n">activations</span><span class="p">,</span><span class="w"> </span><span class="mi">128</span><span class="p">);</span>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="n">pool</span><span class="p">.</span><span class="n">release</span><span class="p">(</span><span class="n">activations</span><span class="p">,</span><span class="w"> </span><span class="mi">128</span><span class="p">);</span><span class="w">   </span><span class="c1">// bug: same pointer, released twice</span>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="kt">float</span><span class="o">*</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pool</span><span class="p">.</span><span class="n">acquire</span><span class="p">(</span><span class="mi">128</span><span class="p">);</span>
+<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="kt">float</span><span class="o">*</span><span class="w"> </span><span class="n">b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pool</span><span class="p">.</span><span class="n">acquire</span><span class="p">(</span><span class="mi">128</span><span class="p">);</span>
+<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="c1">// is a == b ?</span>
+</code></pre></div>
+<p>Compiled and run exactly as described:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>nvcc<span class="w"> </span>-arch<span class="o">=</span>sm_80<span class="w"> </span>04_raii_and_pointer_safety.cu<span class="w"> </span>-o<span class="w"> </span>04_raii_and_pointer_safety
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>./04_raii_and_pointer_safety
+</code></pre></div>
+<p>Genuinely compiled and run:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>=== Section 11.4: what release()'s raw-pointer signature does not prevent ===
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>acquired activations = 0x55e304a97540
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>released the SAME pointer twice -- compiled and ran without complaint
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>acquire(128) #1 -&gt; 0x55e304a97540
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>acquire(128) #2 -&gt; 0x55e304a97540
+<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>are they the same address? true -- ALIASED
+<a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a>writing through 'a' now silently corrupts whatever 'b' is used for,
+<a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>and vice versa -- two live tensors sharing one buffer, neither aware of it.
+<a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a>after a[0]=1.0 then b[0]=2.0: a[0]=2.000000 b[0]=2.000000 (both read back the same memory)
+</code></pre></div>
+<p>(The specific hex address shown above will differ between runs and machines — ASLR randomizes where <code>malloc</code> places a fresh heap allocation each time the program starts. What reproduces on every rerun, genuinely checked while writing this chapter, is the relationship the address values reveal: both <code>acquire(128)</code> calls return the identical address to each other, whatever that address happens to be on a given run.)</p>
+<p>The double <code>release()</code> call inserts the identical address into the size-<code>128</code> free list twice — <code>push_back</code> has no way to know it's already there, because a <code>std::vector&lt;float*&gt;</code> is just a list of addresses, not a set of owned resources. The next two <code>acquire(128)</code> calls each pop one of those two (identical) entries and hand it out, and the printed addresses confirm it directly: <code>a</code> and <code>b</code> are the same pointer, genuinely observed, not asserted. Writing <code>a[0] = 1.0f</code> followed by <code>b[0] = 2.0f</code> and reading both back confirms the consequence exactly as predicted — <code>a[0]</code> reads <code>2.000000</code>, the value written through <code>b</code>, because there was never two buffers to begin with.</p>
+<blockquote>
+<p><code>[COMMON TRAP]</code> Two claims sit side by side in this chapter, and neither one fully survives contact with the chapter's own code. First: "every allocator in this chapter follows the acquire-in-constructor, release-in-destructor rule." Section 11.3's <code>DeviceMemoryPool</code> doesn't — it has no destructor at all, as directly measured. The rule holds for <code>RefCountedBuffer&lt;T&gt;</code> and <code>Arena</code>, both of which define an explicit destructor; it does not hold for the third struct this same chapter builds, one section earlier. Second, narrower claim: that nothing can alias or double-release through this interface. <code>release()</code> takes a plain <code>float*</code>, and Worked Example 11.4.1 just showed, with real printed pointer values, that the same address genuinely comes back out of <code>acquire()</code> twice after a double <code>release()</code> — the safety this pattern seems to promise is real only as programmer discipline, not as something the compiler enforces for a bare pointer type. Fixing this for real would mean giving up on a bare <code>float*</code> at the <code>acquire</code>/<code>release</code> boundary the same way this book gave up on a bare pointer inside <code>Tensor</code> back in Chapter 6 — wrapping it in a small owning type (much like <code>RefCountedBuffer&lt;T&gt;</code> itself, or a <code>unique_ptr</code>-style handle whose move-only semantics reject a second <code>release()</code> at compile time) rather than passing a raw address around and trusting the caller to use it exactly once.</p>
+</blockquote>
+<p>Taken together with <code>Arena</code>'s debug-only bounds check from Section 11.2, this chapter's three structures don't earn the blanket safety claim a first pass at this section's prose would like to make for them: <code>RefCountedBuffer&lt;T&gt;</code>'s shared-ownership discipline genuinely works as described, but <code>Arena</code>'s protection against overrun disappears in a release build, and <code>DeviceMemoryPool</code> — the very struct Worked Example 11.4.1 just misused — has no cleanup path and no protection against being handed the same pointer twice. Combined, Part 1 now has a real memory story: deterministic single ownership from Chapter 6, shared ownership where a graph needs it (Section 11.1), bump allocation where per-step churn dominates (Section 11.2), and a device-side pool where the <em>allocation itself</em>, not the memory, is the expensive resource (Section 11.3) — with two specific, genuinely demonstrated gaps in that story now on the record rather than taken on faith.</p>
+<h2 id="115-complete-runnable-code">11.5 Complete Runnable Code<a class="headerlink" href="#115-complete-runnable-code" title="Permanent link">&para;</a></h2>
+<h3 id="file-01_refcounted_buffercu">File: <code>01_refcounted_buffer.cu</code><a class="headerlink" href="#file-01_refcounted_buffercu" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdio&gt;</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdlib&gt;</span>
+<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>
+<a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">T</span><span class="o">&gt;</span>
+<a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="k">struct</span><span class="w"> </span><span class="nc">RefCountedBuffer</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="w">    </span><span class="n">T</span><span class="o">*</span><span class="w"> </span><span class="n">data</span><span class="p">;</span>
+<a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="w">    </span><span class="kt">int</span><span class="o">*</span><span class="w"> </span><span class="n">refcount</span><span class="p">;</span>
+<a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">count</span><span class="p">;</span>
+<a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a>
+<a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="w">    </span><span class="k">explicit</span><span class="w"> </span><span class="n">RefCountedBuffer</span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">count_</span><span class="p">)</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">count</span><span class="p">(</span><span class="n">count_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="w">        </span><span class="c1">// A real device Tensor buffer would call cudaMalloc here (Chapter 6);</span>
+<a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a><span class="w">        </span><span class="c1">// this uses malloc so the refcounting mechanics below can genuinely</span>
+<a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a><span class="w">        </span><span class="c1">// execute end to end on the host in this no-GPU sandbox -- Chapter 10</span>
+<a id="__codelineno-15-14" name="__codelineno-15-14" href="#__codelineno-15-14"></a><span class="w">        </span><span class="c1">// already established why cudaMalloc itself can't succeed here.</span>
+<a id="__codelineno-15-15" name="__codelineno-15-15" href="#__codelineno-15-15"></a><span class="w">        </span><span class="n">refcount</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="o">*</span><span class="p">)</span><span class="n">malloc</span><span class="p">(</span><span class="k">sizeof</span><span class="p">(</span><span class="kt">int</span><span class="p">));</span>
+<a id="__codelineno-15-16" name="__codelineno-15-16" href="#__codelineno-15-16"></a><span class="w">        </span><span class="o">*</span><span class="n">refcount</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
+<a id="__codelineno-15-17" name="__codelineno-15-17" href="#__codelineno-15-17"></a><span class="w">        </span><span class="n">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">T</span><span class="o">*</span><span class="p">)</span><span class="n">malloc</span><span class="p">(</span><span class="n">count</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">sizeof</span><span class="p">(</span><span class="n">T</span><span class="p">));</span>
+<a id="__codelineno-15-18" name="__codelineno-15-18" href="#__codelineno-15-18"></a><span class="w">        </span><span class="n">printf</span><span class="p">(</span><span class="s">"  RefCountedBuffer(count=%d) constructed -&gt; refcount=%d</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span><span class="w"> </span><span class="n">count</span><span class="p">,</span><span class="w"> </span><span class="o">*</span><span class="n">refcount</span><span class="p">);</span>
+<a id="__codelineno-15-19" name="__codelineno-15-19" href="#__codelineno-15-19"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-15-20" name="__codelineno-15-20" href="#__codelineno-15-20"></a>
+<a id="__codelineno-15-21" name="__codelineno-15-21" href="#__codelineno-15-21"></a><span class="w">    </span><span class="n">RefCountedBuffer</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">RefCountedBuffer</span><span class="o">&amp;</span><span class="w"> </span><span class="n">other</span><span class="p">)</span>
+<a id="__codelineno-15-22" name="__codelineno-15-22" href="#__codelineno-15-22"></a><span class="w">        </span><span class="o">:</span><span class="w"> </span><span class="n">data</span><span class="p">(</span><span class="n">other</span><span class="p">.</span><span class="n">data</span><span class="p">),</span><span class="w"> </span><span class="n">refcount</span><span class="p">(</span><span class="n">other</span><span class="p">.</span><span class="n">refcount</span><span class="p">),</span><span class="w"> </span><span class="n">count</span><span class="p">(</span><span class="n">other</span><span class="p">.</span><span class="n">count</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-15-23" name="__codelineno-15-23" href="#__codelineno-15-23"></a><span class="w">        </span><span class="p">(</span><span class="o">*</span><span class="n">refcount</span><span class="p">)</span><span class="o">++</span><span class="p">;</span>
+<a id="__codelineno-15-24" name="__codelineno-15-24" href="#__codelineno-15-24"></a><span class="w">        </span><span class="n">printf</span><span class="p">(</span><span class="s">"  copy constructed (shares buffer) -&gt; refcount=%d</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span><span class="w"> </span><span class="o">*</span><span class="n">refcount</span><span class="p">);</span>
+<a id="__codelineno-15-25" name="__codelineno-15-25" href="#__codelineno-15-25"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-15-26" name="__codelineno-15-26" href="#__codelineno-15-26"></a>
+<a id="__codelineno-15-27" name="__codelineno-15-27" href="#__codelineno-15-27"></a><span class="w">    </span><span class="o">~</span><span class="n">RefCountedBuffer</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-15-28" name="__codelineno-15-28" href="#__codelineno-15-28"></a><span class="w">        </span><span class="p">(</span><span class="o">*</span><span class="n">refcount</span><span class="p">)</span><span class="o">--</span><span class="p">;</span>
+<a id="__codelineno-15-29" name="__codelineno-15-29" href="#__codelineno-15-29"></a><span class="w">        </span><span class="n">printf</span><span class="p">(</span><span class="s">"  destructor ran -&gt; refcount=%d</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span><span class="w"> </span><span class="o">*</span><span class="n">refcount</span><span class="p">);</span>
+<a id="__codelineno-15-30" name="__codelineno-15-30" href="#__codelineno-15-30"></a><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="n">refcount</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-15-31" name="__codelineno-15-31" href="#__codelineno-15-31"></a><span class="w">            </span><span class="n">printf</span><span class="p">(</span><span class="s">"  refcount hit 0 -&gt; freeing data and refcount</span><span class="se">\n</span><span class="s">"</span><span class="p">);</span>
+<a id="__codelineno-15-32" name="__codelineno-15-32" href="#__codelineno-15-32"></a><span class="w">            </span><span class="n">free</span><span class="p">(</span><span class="n">data</span><span class="p">);</span>
+<a id="__codelineno-15-33" name="__codelineno-15-33" href="#__codelineno-15-33"></a><span class="w">            </span><span class="n">free</span><span class="p">(</span><span class="n">refcount</span><span class="p">);</span>
+<a id="__codelineno-15-34" name="__codelineno-15-34" href="#__codelineno-15-34"></a><span class="w">        </span><span class="p">}</span>
+<a id="__codelineno-15-35" name="__codelineno-15-35" href="#__codelineno-15-35"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-15-36" name="__codelineno-15-36" href="#__codelineno-15-36"></a>
+<a id="__codelineno-15-37" name="__codelineno-15-37" href="#__codelineno-15-37"></a><span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">get_refcount</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="o">*</span><span class="n">refcount</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-15-38" name="__codelineno-15-38" href="#__codelineno-15-38"></a><span class="p">};</span>
+<a id="__codelineno-15-39" name="__codelineno-15-39" href="#__codelineno-15-39"></a>
+<a id="__codelineno-15-40" name="__codelineno-15-40" href="#__codelineno-15-40"></a><span class="kt">int</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-15-41" name="__codelineno-15-41" href="#__codelineno-15-41"></a><span class="w">    </span><span class="n">printf</span><span class="p">(</span><span class="s">"=== Section 11.1: RefCountedBuffer, traced through three lifetimes ===</span><span class="se">\n</span><span class="s">"</span><span class="p">);</span>
+<a id="__codelineno-15-42" name="__codelineno-15-42" href="#__codelineno-15-42"></a><span class="w">    </span><span class="p">{</span>
+<a id="__codelineno-15-43" name="__codelineno-15-43" href="#__codelineno-15-43"></a><span class="w">        </span><span class="n">RefCountedBuffer</span><span class="o">&lt;</span><span class="kt">float</span><span class="o">&gt;</span><span class="w"> </span><span class="n">t</span><span class="p">(</span><span class="mi">4</span><span class="p">);</span>
+<a id="__codelineno-15-44" name="__codelineno-15-44" href="#__codelineno-15-44"></a><span class="w">        </span><span class="n">printf</span><span class="p">(</span><span class="s">"t.refcount() = %d</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span><span class="w"> </span><span class="n">t</span><span class="p">.</span><span class="n">get_refcount</span><span class="p">());</span>
+<a id="__codelineno-15-45" name="__codelineno-15-45" href="#__codelineno-15-45"></a><span class="w">        </span><span class="p">{</span>
+<a id="__codelineno-15-46" name="__codelineno-15-46" href="#__codelineno-15-46"></a><span class="w">            </span><span class="n">RefCountedBuffer</span><span class="o">&lt;</span><span class="kt">float</span><span class="o">&gt;</span><span class="w"> </span><span class="n">v</span><span class="p">(</span><span class="n">t</span><span class="p">);</span>
+<a id="__codelineno-15-47" name="__codelineno-15-47" href="#__codelineno-15-47"></a><span class="w">            </span><span class="n">printf</span><span class="p">(</span><span class="s">"v.refcount() = %d, t.refcount() = %d</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span><span class="w"> </span><span class="n">v</span><span class="p">.</span><span class="n">get_refcount</span><span class="p">(),</span><span class="w"> </span><span class="n">t</span><span class="p">.</span><span class="n">get_refcount</span><span class="p">());</span>
+<a id="__codelineno-15-48" name="__codelineno-15-48" href="#__codelineno-15-48"></a><span class="w">        </span><span class="p">}</span>
+<a id="__codelineno-15-49" name="__codelineno-15-49" href="#__codelineno-15-49"></a><span class="w">        </span><span class="n">printf</span><span class="p">(</span><span class="s">"after v goes out of scope, t.refcount() = %d</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span><span class="w"> </span><span class="n">t</span><span class="p">.</span><span class="n">get_refcount</span><span class="p">());</span>
+<a id="__codelineno-15-50" name="__codelineno-15-50" href="#__codelineno-15-50"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-15-51" name="__codelineno-15-51" href="#__codelineno-15-51"></a><span class="w">    </span><span class="n">printf</span><span class="p">(</span><span class="s">"after t goes out of scope, buffer has been freed</span><span class="se">\n</span><span class="s">"</span><span class="p">);</span>
+<a id="__codelineno-15-52" name="__codelineno-15-52" href="#__codelineno-15-52"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<a id="__codelineno-15-53" name="__codelineno-15-53" href="#__codelineno-15-53"></a><span class="p">}</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>nvcc<span class="w"> </span>-arch<span class="o">=</span>sm_80<span class="w"> </span>01_refcounted_buffer.cu<span class="w"> </span>-o<span class="w"> </span>01_refcounted_buffer
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>./01_refcounted_buffer
+</code></pre></div>
+<h3 id="file-02_arena_allocatorcu">File: <code>02_arena_allocator.cu</code><a class="headerlink" href="#file-02_arena_allocatorcu" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdio&gt;</span>
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdlib&gt;</span>
+<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cassert&gt;</span>
+<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdint&gt;</span>
+<a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>
+<a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="k">struct</span><span class="w"> </span><span class="nc">Arena</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="w">    </span><span class="kt">uint8_t</span><span class="o">*</span><span class="w"> </span><span class="n">base</span><span class="p">;</span>
+<a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="w">    </span><span class="kt">size_t</span><span class="w"> </span><span class="n">capacity</span><span class="p">;</span>
+<a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a><span class="w">    </span><span class="kt">size_t</span><span class="w"> </span><span class="n">offset</span><span class="p">;</span>
+<a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a>
+<a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a><span class="w">    </span><span class="k">explicit</span><span class="w"> </span><span class="n">Arena</span><span class="p">(</span><span class="kt">size_t</span><span class="w"> </span><span class="n">capacity_bytes</span><span class="p">)</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">capacity</span><span class="p">(</span><span class="n">capacity_bytes</span><span class="p">),</span><span class="w"> </span><span class="n">offset</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a><span class="w">        </span><span class="n">base</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="kt">uint8_t</span><span class="o">*</span><span class="p">)</span><span class="n">malloc</span><span class="p">(</span><span class="n">capacity_bytes</span><span class="p">);</span>
+<a id="__codelineno-17-13" name="__codelineno-17-13" href="#__codelineno-17-13"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-17-14" name="__codelineno-17-14" href="#__codelineno-17-14"></a>
+<a id="__codelineno-17-15" name="__codelineno-17-15" href="#__codelineno-17-15"></a><span class="w">    </span><span class="o">~</span><span class="n">Arena</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">free</span><span class="p">(</span><span class="n">base</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-17-16" name="__codelineno-17-16" href="#__codelineno-17-16"></a>
+<a id="__codelineno-17-17" name="__codelineno-17-17" href="#__codelineno-17-17"></a><span class="w">    </span><span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">T</span><span class="o">&gt;</span>
+<a id="__codelineno-17-18" name="__codelineno-17-18" href="#__codelineno-17-18"></a><span class="w">    </span><span class="n">T</span><span class="o">*</span><span class="w"> </span><span class="n">alloc</span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">count</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-17-19" name="__codelineno-17-19" href="#__codelineno-17-19"></a><span class="w">        </span><span class="kt">size_t</span><span class="w"> </span><span class="n">bytes_needed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="kt">size_t</span><span class="p">)</span><span class="n">count</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">sizeof</span><span class="p">(</span><span class="n">T</span><span class="p">);</span>
+<a id="__codelineno-17-20" name="__codelineno-17-20" href="#__codelineno-17-20"></a><span class="w">        </span><span class="c1">// 256-byte alignment matches cudaMalloc's own alignment guarantee</span>
+<a id="__codelineno-17-21" name="__codelineno-17-21" href="#__codelineno-17-21"></a><span class="w">        </span><span class="c1">// (Chapter 7.3, exercised for real in Chapter 10.2) -- so a buffer</span>
+<a id="__codelineno-17-22" name="__codelineno-17-22" href="#__codelineno-17-22"></a><span class="w">        </span><span class="c1">// handed out by this arena is as usable for a vectorized float4</span>
+<a id="__codelineno-17-23" name="__codelineno-17-23" href="#__codelineno-17-23"></a><span class="w">        </span><span class="c1">// load as one cudaMalloc would have produced.</span>
+<a id="__codelineno-17-24" name="__codelineno-17-24" href="#__codelineno-17-24"></a><span class="w">        </span><span class="kt">size_t</span><span class="w"> </span><span class="n">aligned_offset</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">offset</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">255</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="o">~</span><span class="kt">size_t</span><span class="p">(</span><span class="mi">255</span><span class="p">);</span>
+<a id="__codelineno-17-25" name="__codelineno-17-25" href="#__codelineno-17-25"></a><span class="w">        </span><span class="n">assert</span><span class="p">(</span><span class="n">aligned_offset</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">bytes_needed</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">capacity</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="s">"Arena exhausted"</span><span class="p">);</span>
+<a id="__codelineno-17-26" name="__codelineno-17-26" href="#__codelineno-17-26"></a><span class="w">        </span><span class="n">T</span><span class="o">*</span><span class="w"> </span><span class="n">ptr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">T</span><span class="o">*</span><span class="p">)(</span><span class="n">base</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">aligned_offset</span><span class="p">);</span>
+<a id="__codelineno-17-27" name="__codelineno-17-27" href="#__codelineno-17-27"></a><span class="w">        </span><span class="n">offset</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">aligned_offset</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">bytes_needed</span><span class="p">;</span>
+<a id="__codelineno-17-28" name="__codelineno-17-28" href="#__codelineno-17-28"></a><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">ptr</span><span class="p">;</span>
+<a id="__codelineno-17-29" name="__codelineno-17-29" href="#__codelineno-17-29"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-17-30" name="__codelineno-17-30" href="#__codelineno-17-30"></a>
+<a id="__codelineno-17-31" name="__codelineno-17-31" href="#__codelineno-17-31"></a><span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="n">reset</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">offset</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-17-32" name="__codelineno-17-32" href="#__codelineno-17-32"></a><span class="w">    </span><span class="kt">size_t</span><span class="w"> </span><span class="n">bytes_used</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">offset</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-17-33" name="__codelineno-17-33" href="#__codelineno-17-33"></a><span class="p">};</span>
+<a id="__codelineno-17-34" name="__codelineno-17-34" href="#__codelineno-17-34"></a>
+<a id="__codelineno-17-35" name="__codelineno-17-35" href="#__codelineno-17-35"></a><span class="kt">int</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-17-36" name="__codelineno-17-36" href="#__codelineno-17-36"></a><span class="w">    </span><span class="n">printf</span><span class="p">(</span><span class="s">"=== Section 11.2: Arena, alignment arithmetic traced by hand ===</span><span class="se">\n</span><span class="s">"</span><span class="p">);</span>
+<a id="__codelineno-17-37" name="__codelineno-17-37" href="#__codelineno-17-37"></a><span class="w">    </span><span class="n">Arena</span><span class="w"> </span><span class="n">arena</span><span class="p">(</span><span class="mi">4096</span><span class="p">);</span>
+<a id="__codelineno-17-38" name="__codelineno-17-38" href="#__codelineno-17-38"></a>
+<a id="__codelineno-17-39" name="__codelineno-17-39" href="#__codelineno-17-39"></a><span class="w">    </span><span class="kt">float</span><span class="o">*</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">arena</span><span class="p">.</span><span class="n">alloc</span><span class="o">&lt;</span><span class="kt">float</span><span class="o">&gt;</span><span class="p">(</span><span class="mi">100</span><span class="p">);</span>
+<a id="__codelineno-17-40" name="__codelineno-17-40" href="#__codelineno-17-40"></a><span class="w">    </span><span class="n">printf</span><span class="p">(</span><span class="s">"after alloc&lt;float&gt;(100): offset=%zu (expected 400)</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span><span class="w"> </span><span class="n">arena</span><span class="p">.</span><span class="n">bytes_used</span><span class="p">());</span>
+<a id="__codelineno-17-41" name="__codelineno-17-41" href="#__codelineno-17-41"></a>
+<a id="__codelineno-17-42" name="__codelineno-17-42" href="#__codelineno-17-42"></a><span class="w">    </span><span class="kt">float</span><span class="o">*</span><span class="w"> </span><span class="n">b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">arena</span><span class="p">.</span><span class="n">alloc</span><span class="o">&lt;</span><span class="kt">float</span><span class="o">&gt;</span><span class="p">(</span><span class="mi">50</span><span class="p">);</span>
+<a id="__codelineno-17-43" name="__codelineno-17-43" href="#__codelineno-17-43"></a><span class="w">    </span><span class="n">printf</span><span class="p">(</span><span class="s">"after alloc&lt;float&gt;(50):  offset=%zu (expected 712)</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span><span class="w"> </span><span class="n">arena</span><span class="p">.</span><span class="n">bytes_used</span><span class="p">());</span>
+<a id="__codelineno-17-44" name="__codelineno-17-44" href="#__codelineno-17-44"></a><span class="w">    </span><span class="n">printf</span><span class="p">(</span><span class="s">"second allocation's aligned start = %zu, padding skipped = %zu</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span>
+<a id="__codelineno-17-45" name="__codelineno-17-45" href="#__codelineno-17-45"></a><span class="w">           </span><span class="p">(</span><span class="kt">size_t</span><span class="p">)((</span><span class="kt">uint8_t</span><span class="o">*</span><span class="p">)</span><span class="n">b</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">arena</span><span class="p">.</span><span class="n">base</span><span class="p">),</span>
+<a id="__codelineno-17-46" name="__codelineno-17-46" href="#__codelineno-17-46"></a><span class="w">           </span><span class="p">(</span><span class="kt">size_t</span><span class="p">)((</span><span class="kt">uint8_t</span><span class="o">*</span><span class="p">)</span><span class="n">b</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">arena</span><span class="p">.</span><span class="n">base</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">400</span><span class="p">);</span>
+<a id="__codelineno-17-47" name="__codelineno-17-47" href="#__codelineno-17-47"></a>
+<a id="__codelineno-17-48" name="__codelineno-17-48" href="#__codelineno-17-48"></a><span class="w">    </span><span class="n">arena</span><span class="p">.</span><span class="n">reset</span><span class="p">();</span>
+<a id="__codelineno-17-49" name="__codelineno-17-49" href="#__codelineno-17-49"></a><span class="w">    </span><span class="n">printf</span><span class="p">(</span><span class="s">"after reset(): offset=%zu</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span><span class="w"> </span><span class="n">arena</span><span class="p">.</span><span class="n">bytes_used</span><span class="p">());</span>
+<a id="__codelineno-17-50" name="__codelineno-17-50" href="#__codelineno-17-50"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<a id="__codelineno-17-51" name="__codelineno-17-51" href="#__codelineno-17-51"></a><span class="p">}</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>nvcc<span class="w"> </span>-arch<span class="o">=</span>sm_80<span class="w"> </span>02_arena_allocator.cu<span class="w"> </span>-o<span class="w"> </span>02_arena_allocator
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>./02_arena_allocator
+</code></pre></div>
+<h3 id="file-02b_arena_overruncu-the-debug-vs-release-divergence-from-worked-example-1122">File: <code>02b_arena_overrun.cu</code> — the debug-vs-release divergence from Worked Example 11.2.2<a class="headerlink" href="#file-02b_arena_overruncu-the-debug-vs-release-divergence-from-worked-example-1122" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdio&gt;</span>
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdlib&gt;</span>
+<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cassert&gt;</span>
+<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdint&gt;</span>
+<a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>
+<a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="k">struct</span><span class="w"> </span><span class="nc">Arena</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="w">    </span><span class="kt">uint8_t</span><span class="o">*</span><span class="w"> </span><span class="n">base</span><span class="p">;</span>
+<a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a><span class="w">    </span><span class="kt">size_t</span><span class="w"> </span><span class="n">capacity</span><span class="p">;</span>
+<a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a><span class="w">    </span><span class="kt">size_t</span><span class="w"> </span><span class="n">offset</span><span class="p">;</span>
+<a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a>
+<a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a><span class="w">    </span><span class="k">explicit</span><span class="w"> </span><span class="n">Arena</span><span class="p">(</span><span class="kt">size_t</span><span class="w"> </span><span class="n">capacity_bytes</span><span class="p">)</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">capacity</span><span class="p">(</span><span class="n">capacity_bytes</span><span class="p">),</span><span class="w"> </span><span class="n">offset</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-19-12" name="__codelineno-19-12" href="#__codelineno-19-12"></a><span class="w">        </span><span class="n">base</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="kt">uint8_t</span><span class="o">*</span><span class="p">)</span><span class="n">malloc</span><span class="p">(</span><span class="n">capacity_bytes</span><span class="p">);</span>
+<a id="__codelineno-19-13" name="__codelineno-19-13" href="#__codelineno-19-13"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-19-14" name="__codelineno-19-14" href="#__codelineno-19-14"></a><span class="w">    </span><span class="o">~</span><span class="n">Arena</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">free</span><span class="p">(</span><span class="n">base</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-19-15" name="__codelineno-19-15" href="#__codelineno-19-15"></a>
+<a id="__codelineno-19-16" name="__codelineno-19-16" href="#__codelineno-19-16"></a><span class="w">    </span><span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">T</span><span class="o">&gt;</span>
+<a id="__codelineno-19-17" name="__codelineno-19-17" href="#__codelineno-19-17"></a><span class="w">    </span><span class="n">T</span><span class="o">*</span><span class="w"> </span><span class="n">alloc</span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">count</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-19-18" name="__codelineno-19-18" href="#__codelineno-19-18"></a><span class="w">        </span><span class="kt">size_t</span><span class="w"> </span><span class="n">bytes_needed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="kt">size_t</span><span class="p">)</span><span class="n">count</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">sizeof</span><span class="p">(</span><span class="n">T</span><span class="p">);</span>
+<a id="__codelineno-19-19" name="__codelineno-19-19" href="#__codelineno-19-19"></a><span class="w">        </span><span class="kt">size_t</span><span class="w"> </span><span class="n">aligned_offset</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">offset</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">255</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="o">~</span><span class="kt">size_t</span><span class="p">(</span><span class="mi">255</span><span class="p">);</span>
+<a id="__codelineno-19-20" name="__codelineno-19-20" href="#__codelineno-19-20"></a><span class="w">        </span><span class="n">assert</span><span class="p">(</span><span class="n">aligned_offset</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">bytes_needed</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">capacity</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="s">"Arena exhausted"</span><span class="p">);</span>
+<a id="__codelineno-19-21" name="__codelineno-19-21" href="#__codelineno-19-21"></a><span class="w">        </span><span class="n">T</span><span class="o">*</span><span class="w"> </span><span class="n">ptr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">T</span><span class="o">*</span><span class="p">)(</span><span class="n">base</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">aligned_offset</span><span class="p">);</span>
+<a id="__codelineno-19-22" name="__codelineno-19-22" href="#__codelineno-19-22"></a><span class="w">        </span><span class="n">offset</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">aligned_offset</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">bytes_needed</span><span class="p">;</span>
+<a id="__codelineno-19-23" name="__codelineno-19-23" href="#__codelineno-19-23"></a><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">ptr</span><span class="p">;</span>
+<a id="__codelineno-19-24" name="__codelineno-19-24" href="#__codelineno-19-24"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-19-25" name="__codelineno-19-25" href="#__codelineno-19-25"></a><span class="p">};</span>
+<a id="__codelineno-19-26" name="__codelineno-19-26" href="#__codelineno-19-26"></a>
+<a id="__codelineno-19-27" name="__codelineno-19-27" href="#__codelineno-19-27"></a><span class="kt">int</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-19-28" name="__codelineno-19-28" href="#__codelineno-19-28"></a><span class="w">    </span><span class="n">printf</span><span class="p">(</span><span class="s">"=== requesting far more than an 800-byte arena's capacity ===</span><span class="se">\n</span><span class="s">"</span><span class="p">);</span>
+<a id="__codelineno-19-29" name="__codelineno-19-29" href="#__codelineno-19-29"></a><span class="w">    </span><span class="n">Arena</span><span class="w"> </span><span class="n">arena</span><span class="p">(</span><span class="mi">800</span><span class="p">);</span>
+<a id="__codelineno-19-30" name="__codelineno-19-30" href="#__codelineno-19-30"></a><span class="w">    </span><span class="c1">// 1000 floats = 4000 bytes, into an 800-byte arena</span>
+<a id="__codelineno-19-31" name="__codelineno-19-31" href="#__codelineno-19-31"></a><span class="w">    </span><span class="kt">float</span><span class="o">*</span><span class="w"> </span><span class="n">p</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">arena</span><span class="p">.</span><span class="n">alloc</span><span class="o">&lt;</span><span class="kt">float</span><span class="o">&gt;</span><span class="p">(</span><span class="mi">1000</span><span class="p">);</span>
+<a id="__codelineno-19-32" name="__codelineno-19-32" href="#__codelineno-19-32"></a><span class="w">    </span><span class="n">printf</span><span class="p">(</span><span class="s">"alloc did not abort. pointer offset from base = %zu bytes (arena capacity = %zu)</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span>
+<a id="__codelineno-19-33" name="__codelineno-19-33" href="#__codelineno-19-33"></a><span class="w">           </span><span class="p">(</span><span class="kt">size_t</span><span class="p">)((</span><span class="kt">uint8_t</span><span class="o">*</span><span class="p">)</span><span class="n">p</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">arena</span><span class="p">.</span><span class="n">base</span><span class="p">),</span><span class="w"> </span><span class="n">arena</span><span class="p">.</span><span class="n">capacity</span><span class="p">);</span>
+<a id="__codelineno-19-34" name="__codelineno-19-34" href="#__codelineno-19-34"></a><span class="w">    </span><span class="n">printf</span><span class="p">(</span><span class="s">"writing through the returned pointer now (this touches memory past the arena)...</span><span class="se">\n</span><span class="s">"</span><span class="p">);</span>
+<a id="__codelineno-19-35" name="__codelineno-19-35" href="#__codelineno-19-35"></a><span class="w">    </span><span class="n">p</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">3.14f</span><span class="p">;</span>
+<a id="__codelineno-19-36" name="__codelineno-19-36" href="#__codelineno-19-36"></a><span class="w">    </span><span class="n">printf</span><span class="p">(</span><span class="s">"wrote p[0] = %f without any detected error</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span><span class="w"> </span><span class="n">p</span><span class="p">[</span><span class="mi">0</span><span class="p">]);</span>
+<a id="__codelineno-19-37" name="__codelineno-19-37" href="#__codelineno-19-37"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<a id="__codelineno-19-38" name="__codelineno-19-38" href="#__codelineno-19-38"></a><span class="p">}</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># debug build: assert compiled in</span>
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>nvcc<span class="w"> </span>-arch<span class="o">=</span>sm_80<span class="w"> </span>02b_arena_overrun.cu<span class="w"> </span>-o<span class="w"> </span>02b_debug
+<a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>./02b_debug
+<a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"exit code: </span><span class="nv">$?</span><span class="s2">"</span>
+<a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a>
+<a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="c1"># release build: NDEBUG strips the assert entirely</span>
+<a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a>nvcc<span class="w"> </span>-arch<span class="o">=</span>sm_80<span class="w"> </span>-DNDEBUG<span class="w"> </span>02b_arena_overrun.cu<span class="w"> </span>-o<span class="w"> </span>02b_release
+<a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a>./02b_release
+<a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"exit code: </span><span class="nv">$?</span><span class="s2">"</span>
+</code></pre></div>
+<h3 id="file-03_device_memory_poolcu">File: <code>03_device_memory_pool.cu</code><a class="headerlink" href="#file-03_device_memory_poolcu" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdio&gt;</span>
+<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdlib&gt;</span>
+<a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;unordered_map&gt;</span>
+<a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;vector&gt;</span>
+<a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>
+<a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a><span class="c1">// A tracked allocator standing in for cudaMalloc/cudaFree: Chapter 10 already</span>
+<a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a><span class="c1">// established that a real cudaMalloc call fails immediately in this no-GPU</span>
+<a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a><span class="c1">// sandbox (cudaErrorNoDevice), so DeviceMemoryPool below routes through this</span>
+<a id="__codelineno-21-9" name="__codelineno-21-9" href="#__codelineno-21-9"></a><span class="c1">// tracked malloc/free pair instead -- purely so that the leak this section</span>
+<a id="__codelineno-21-10" name="__codelineno-21-10" href="#__codelineno-21-10"></a><span class="c1">// demonstrates is one we can genuinely count, not merely narrate.</span>
+<a id="__codelineno-21-11" name="__codelineno-21-11" href="#__codelineno-21-11"></a><span class="k">static</span><span class="w"> </span><span class="kt">long</span><span class="w"> </span><span class="n">g_outstanding_allocations</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<a id="__codelineno-21-12" name="__codelineno-21-12" href="#__codelineno-21-12"></a>
+<a id="__codelineno-21-13" name="__codelineno-21-13" href="#__codelineno-21-13"></a><span class="kt">float</span><span class="o">*</span><span class="w"> </span><span class="nf">tracked_alloc</span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">count</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-21-14" name="__codelineno-21-14" href="#__codelineno-21-14"></a><span class="w">    </span><span class="n">g_outstanding_allocations</span><span class="o">++</span><span class="p">;</span>
+<a id="__codelineno-21-15" name="__codelineno-21-15" href="#__codelineno-21-15"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="p">(</span><span class="kt">float</span><span class="o">*</span><span class="p">)</span><span class="n">malloc</span><span class="p">(</span><span class="n">count</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">sizeof</span><span class="p">(</span><span class="kt">float</span><span class="p">));</span>
+<a id="__codelineno-21-16" name="__codelineno-21-16" href="#__codelineno-21-16"></a><span class="p">}</span>
+<a id="__codelineno-21-17" name="__codelineno-21-17" href="#__codelineno-21-17"></a>
+<a id="__codelineno-21-18" name="__codelineno-21-18" href="#__codelineno-21-18"></a><span class="kt">void</span><span class="w"> </span><span class="nf">tracked_free</span><span class="p">(</span><span class="kt">float</span><span class="o">*</span><span class="w"> </span><span class="n">ptr</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-21-19" name="__codelineno-21-19" href="#__codelineno-21-19"></a><span class="w">    </span><span class="n">g_outstanding_allocations</span><span class="o">--</span><span class="p">;</span>
+<a id="__codelineno-21-20" name="__codelineno-21-20" href="#__codelineno-21-20"></a><span class="w">    </span><span class="n">free</span><span class="p">(</span><span class="n">ptr</span><span class="p">);</span>
+<a id="__codelineno-21-21" name="__codelineno-21-21" href="#__codelineno-21-21"></a><span class="p">}</span>
+<a id="__codelineno-21-22" name="__codelineno-21-22" href="#__codelineno-21-22"></a>
+<a id="__codelineno-21-23" name="__codelineno-21-23" href="#__codelineno-21-23"></a><span class="k">struct</span><span class="w"> </span><span class="nc">DeviceMemoryPool</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-21-24" name="__codelineno-21-24" href="#__codelineno-21-24"></a><span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">unordered_map</span><span class="o">&lt;</span><span class="kt">int</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="kt">float</span><span class="o">*&gt;&gt;</span><span class="w"> </span><span class="n">free_lists</span><span class="p">;</span>
+<a id="__codelineno-21-25" name="__codelineno-21-25" href="#__codelineno-21-25"></a><span class="w">    </span><span class="kt">long</span><span class="w"> </span><span class="n">bytes_allocated</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<a id="__codelineno-21-26" name="__codelineno-21-26" href="#__codelineno-21-26"></a><span class="w">    </span><span class="kt">long</span><span class="w"> </span><span class="n">bytes_reused</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<a id="__codelineno-21-27" name="__codelineno-21-27" href="#__codelineno-21-27"></a>
+<a id="__codelineno-21-28" name="__codelineno-21-28" href="#__codelineno-21-28"></a><span class="w">    </span><span class="c1">// Deliberately no destructor -- Section 11.3's point.</span>
+<a id="__codelineno-21-29" name="__codelineno-21-29" href="#__codelineno-21-29"></a>
+<a id="__codelineno-21-30" name="__codelineno-21-30" href="#__codelineno-21-30"></a><span class="w">    </span><span class="kt">float</span><span class="o">*</span><span class="w"> </span><span class="nf">acquire</span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">count</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-21-31" name="__codelineno-21-31" href="#__codelineno-21-31"></a><span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="n">it</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">free_lists</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="n">count</span><span class="p">);</span>
+<a id="__codelineno-21-32" name="__codelineno-21-32" href="#__codelineno-21-32"></a><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">it</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">free_lists</span><span class="p">.</span><span class="n">end</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">!</span><span class="n">it</span><span class="o">-&gt;</span><span class="n">second</span><span class="p">.</span><span class="n">empty</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-21-33" name="__codelineno-21-33" href="#__codelineno-21-33"></a><span class="w">            </span><span class="kt">float</span><span class="o">*</span><span class="w"> </span><span class="n">ptr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">it</span><span class="o">-&gt;</span><span class="n">second</span><span class="p">.</span><span class="n">back</span><span class="p">();</span>
+<a id="__codelineno-21-34" name="__codelineno-21-34" href="#__codelineno-21-34"></a><span class="w">            </span><span class="n">it</span><span class="o">-&gt;</span><span class="n">second</span><span class="p">.</span><span class="n">pop_back</span><span class="p">();</span>
+<a id="__codelineno-21-35" name="__codelineno-21-35" href="#__codelineno-21-35"></a><span class="w">            </span><span class="n">bytes_reused</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">count</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">4</span><span class="p">;</span>
+<a id="__codelineno-21-36" name="__codelineno-21-36" href="#__codelineno-21-36"></a><span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="n">ptr</span><span class="p">;</span>
+<a id="__codelineno-21-37" name="__codelineno-21-37" href="#__codelineno-21-37"></a><span class="w">        </span><span class="p">}</span>
+<a id="__codelineno-21-38" name="__codelineno-21-38" href="#__codelineno-21-38"></a><span class="w">        </span><span class="n">bytes_allocated</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">count</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">4</span><span class="p">;</span>
+<a id="__codelineno-21-39" name="__codelineno-21-39" href="#__codelineno-21-39"></a><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">tracked_alloc</span><span class="p">(</span><span class="n">count</span><span class="p">);</span>
+<a id="__codelineno-21-40" name="__codelineno-21-40" href="#__codelineno-21-40"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-21-41" name="__codelineno-21-41" href="#__codelineno-21-41"></a>
+<a id="__codelineno-21-42" name="__codelineno-21-42" href="#__codelineno-21-42"></a><span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">release</span><span class="p">(</span><span class="kt">float</span><span class="o">*</span><span class="w"> </span><span class="n">ptr</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">count</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-21-43" name="__codelineno-21-43" href="#__codelineno-21-43"></a><span class="w">        </span><span class="n">free_lists</span><span class="p">[</span><span class="n">count</span><span class="p">].</span><span class="n">push_back</span><span class="p">(</span><span class="n">ptr</span><span class="p">);</span>
+<a id="__codelineno-21-44" name="__codelineno-21-44" href="#__codelineno-21-44"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-21-45" name="__codelineno-21-45" href="#__codelineno-21-45"></a>
+<a id="__codelineno-21-46" name="__codelineno-21-46" href="#__codelineno-21-46"></a><span class="w">    </span><span class="kt">double</span><span class="w"> </span><span class="nf">hit_rate</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-21-47" name="__codelineno-21-47" href="#__codelineno-21-47"></a><span class="w">        </span><span class="kt">long</span><span class="w"> </span><span class="n">total</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">bytes_allocated</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">bytes_reused</span><span class="p">;</span>
+<a id="__codelineno-21-48" name="__codelineno-21-48" href="#__codelineno-21-48"></a><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">total</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="p">(</span><span class="kt">double</span><span class="p">)</span><span class="n">bytes_reused</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="p">(</span><span class="kt">double</span><span class="p">)</span><span class="n">total</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="mf">0.0</span><span class="p">;</span>
+<a id="__codelineno-21-49" name="__codelineno-21-49" href="#__codelineno-21-49"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-21-50" name="__codelineno-21-50" href="#__codelineno-21-50"></a><span class="p">};</span>
+<a id="__codelineno-21-51" name="__codelineno-21-51" href="#__codelineno-21-51"></a>
+<a id="__codelineno-21-52" name="__codelineno-21-52" href="#__codelineno-21-52"></a><span class="kt">int</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-21-53" name="__codelineno-21-53" href="#__codelineno-21-53"></a><span class="w">    </span><span class="n">printf</span><span class="p">(</span><span class="s">"=== Section 11.3: DeviceMemoryPool, three steps toward a hit rate ===</span><span class="se">\n</span><span class="s">"</span><span class="p">);</span>
+<a id="__codelineno-21-54" name="__codelineno-21-54" href="#__codelineno-21-54"></a><span class="w">    </span><span class="p">{</span>
+<a id="__codelineno-21-55" name="__codelineno-21-55" href="#__codelineno-21-55"></a><span class="w">        </span><span class="n">DeviceMemoryPool</span><span class="w"> </span><span class="n">pool</span><span class="p">;</span>
+<a id="__codelineno-21-56" name="__codelineno-21-56" href="#__codelineno-21-56"></a>
+<a id="__codelineno-21-57" name="__codelineno-21-57" href="#__codelineno-21-57"></a><span class="w">        </span><span class="kt">float</span><span class="o">*</span><span class="w"> </span><span class="n">step1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pool</span><span class="p">.</span><span class="n">acquire</span><span class="p">(</span><span class="mi">256</span><span class="p">);</span>
+<a id="__codelineno-21-58" name="__codelineno-21-58" href="#__codelineno-21-58"></a><span class="w">        </span><span class="n">printf</span><span class="p">(</span><span class="s">"step 1: acquire(256) -&gt; fresh allocation. bytes_allocated=%ld bytes_reused=%ld</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span>
+<a id="__codelineno-21-59" name="__codelineno-21-59" href="#__codelineno-21-59"></a><span class="w">               </span><span class="n">pool</span><span class="p">.</span><span class="n">bytes_allocated</span><span class="p">,</span><span class="w"> </span><span class="n">pool</span><span class="p">.</span><span class="n">bytes_reused</span><span class="p">);</span>
+<a id="__codelineno-21-60" name="__codelineno-21-60" href="#__codelineno-21-60"></a><span class="w">        </span><span class="n">pool</span><span class="p">.</span><span class="n">release</span><span class="p">(</span><span class="n">step1</span><span class="p">,</span><span class="w"> </span><span class="mi">256</span><span class="p">);</span>
+<a id="__codelineno-21-61" name="__codelineno-21-61" href="#__codelineno-21-61"></a>
+<a id="__codelineno-21-62" name="__codelineno-21-62" href="#__codelineno-21-62"></a><span class="w">        </span><span class="kt">float</span><span class="o">*</span><span class="w"> </span><span class="n">step2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pool</span><span class="p">.</span><span class="n">acquire</span><span class="p">(</span><span class="mi">256</span><span class="p">);</span>
+<a id="__codelineno-21-63" name="__codelineno-21-63" href="#__codelineno-21-63"></a><span class="w">        </span><span class="n">printf</span><span class="p">(</span><span class="s">"step 2: acquire(256) -&gt; reused? %s. bytes_allocated=%ld bytes_reused=%ld</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span>
+<a id="__codelineno-21-64" name="__codelineno-21-64" href="#__codelineno-21-64"></a><span class="w">               </span><span class="p">(</span><span class="n">step2</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">step1</span><span class="p">)</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="s">"true (same pointer)"</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="s">"false"</span><span class="p">,</span><span class="w"> </span><span class="n">pool</span><span class="p">.</span><span class="n">bytes_allocated</span><span class="p">,</span><span class="w"> </span><span class="n">pool</span><span class="p">.</span><span class="n">bytes_reused</span><span class="p">);</span>
+<a id="__codelineno-21-65" name="__codelineno-21-65" href="#__codelineno-21-65"></a><span class="w">        </span><span class="n">pool</span><span class="p">.</span><span class="n">release</span><span class="p">(</span><span class="n">step2</span><span class="p">,</span><span class="w"> </span><span class="mi">256</span><span class="p">);</span>
+<a id="__codelineno-21-66" name="__codelineno-21-66" href="#__codelineno-21-66"></a>
+<a id="__codelineno-21-67" name="__codelineno-21-67" href="#__codelineno-21-67"></a><span class="w">        </span><span class="kt">float</span><span class="o">*</span><span class="w"> </span><span class="n">step3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pool</span><span class="p">.</span><span class="n">acquire</span><span class="p">(</span><span class="mi">256</span><span class="p">);</span>
+<a id="__codelineno-21-68" name="__codelineno-21-68" href="#__codelineno-21-68"></a><span class="w">        </span><span class="n">printf</span><span class="p">(</span><span class="s">"step 3: acquire(256) -&gt; reused? %s. bytes_allocated=%ld bytes_reused=%ld</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span>
+<a id="__codelineno-21-69" name="__codelineno-21-69" href="#__codelineno-21-69"></a><span class="w">               </span><span class="p">(</span><span class="n">step3</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">step1</span><span class="p">)</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="s">"true (same pointer)"</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="s">"false"</span><span class="p">,</span><span class="w"> </span><span class="n">pool</span><span class="p">.</span><span class="n">bytes_allocated</span><span class="p">,</span><span class="w"> </span><span class="n">pool</span><span class="p">.</span><span class="n">bytes_reused</span><span class="p">);</span>
+<a id="__codelineno-21-70" name="__codelineno-21-70" href="#__codelineno-21-70"></a><span class="w">        </span><span class="n">pool</span><span class="p">.</span><span class="n">release</span><span class="p">(</span><span class="n">step3</span><span class="p">,</span><span class="w"> </span><span class="mi">256</span><span class="p">);</span>
+<a id="__codelineno-21-71" name="__codelineno-21-71" href="#__codelineno-21-71"></a>
+<a id="__codelineno-21-72" name="__codelineno-21-72" href="#__codelineno-21-72"></a><span class="w">        </span><span class="n">printf</span><span class="p">(</span><span class="s">"hit_rate() = %ld / %ld = %.3f</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span><span class="w"> </span><span class="n">pool</span><span class="p">.</span><span class="n">bytes_reused</span><span class="p">,</span>
+<a id="__codelineno-21-73" name="__codelineno-21-73" href="#__codelineno-21-73"></a><span class="w">               </span><span class="n">pool</span><span class="p">.</span><span class="n">bytes_allocated</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">pool</span><span class="p">.</span><span class="n">bytes_reused</span><span class="p">,</span><span class="w"> </span><span class="n">pool</span><span class="p">.</span><span class="n">hit_rate</span><span class="p">());</span>
+<a id="__codelineno-21-74" name="__codelineno-21-74" href="#__codelineno-21-74"></a>
+<a id="__codelineno-21-75" name="__codelineno-21-75" href="#__codelineno-21-75"></a><span class="w">        </span><span class="n">printf</span><span class="p">(</span><span class="s">"g_outstanding_allocations while pool is still alive = %ld</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span><span class="w"> </span><span class="n">g_outstanding_allocations</span><span class="p">);</span>
+<a id="__codelineno-21-76" name="__codelineno-21-76" href="#__codelineno-21-76"></a><span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="c1">// pool goes out of scope here -- synthesized destructor runs</span>
+<a id="__codelineno-21-77" name="__codelineno-21-77" href="#__codelineno-21-77"></a><span class="w">    </span><span class="n">printf</span><span class="p">(</span><span class="s">"g_outstanding_allocations after pool went out of scope = %ld (expected: still 1, not 0)</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span>
+<a id="__codelineno-21-78" name="__codelineno-21-78" href="#__codelineno-21-78"></a><span class="w">           </span><span class="n">g_outstanding_allocations</span><span class="p">);</span>
+<a id="__codelineno-21-79" name="__codelineno-21-79" href="#__codelineno-21-79"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<a id="__codelineno-21-80" name="__codelineno-21-80" href="#__codelineno-21-80"></a><span class="p">}</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>nvcc<span class="w"> </span>-arch<span class="o">=</span>sm_80<span class="w"> </span>03_device_memory_pool.cu<span class="w"> </span>-o<span class="w"> </span>03_device_memory_pool
+<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>./03_device_memory_pool
+</code></pre></div>
+<h3 id="file-04_raii_and_pointer_safetycu">File: <code>04_raii_and_pointer_safety.cu</code><a class="headerlink" href="#file-04_raii_and_pointer_safetycu" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdio&gt;</span>
+<a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdlib&gt;</span>
+<a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;unordered_map&gt;</span>
+<a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;vector&gt;</span>
+<a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a>
+<a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a><span class="k">struct</span><span class="w"> </span><span class="nc">DeviceMemoryPool</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-23-7" name="__codelineno-23-7" href="#__codelineno-23-7"></a><span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">unordered_map</span><span class="o">&lt;</span><span class="kt">int</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="kt">float</span><span class="o">*&gt;&gt;</span><span class="w"> </span><span class="n">free_lists</span><span class="p">;</span>
+<a id="__codelineno-23-8" name="__codelineno-23-8" href="#__codelineno-23-8"></a><span class="w">    </span><span class="kt">long</span><span class="w"> </span><span class="n">bytes_allocated</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<a id="__codelineno-23-9" name="__codelineno-23-9" href="#__codelineno-23-9"></a><span class="w">    </span><span class="kt">long</span><span class="w"> </span><span class="n">bytes_reused</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<a id="__codelineno-23-10" name="__codelineno-23-10" href="#__codelineno-23-10"></a>
+<a id="__codelineno-23-11" name="__codelineno-23-11" href="#__codelineno-23-11"></a><span class="w">    </span><span class="kt">float</span><span class="o">*</span><span class="w"> </span><span class="nf">acquire</span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">count</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-23-12" name="__codelineno-23-12" href="#__codelineno-23-12"></a><span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="n">it</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">free_lists</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="n">count</span><span class="p">);</span>
+<a id="__codelineno-23-13" name="__codelineno-23-13" href="#__codelineno-23-13"></a><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">it</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">free_lists</span><span class="p">.</span><span class="n">end</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">!</span><span class="n">it</span><span class="o">-&gt;</span><span class="n">second</span><span class="p">.</span><span class="n">empty</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-23-14" name="__codelineno-23-14" href="#__codelineno-23-14"></a><span class="w">            </span><span class="kt">float</span><span class="o">*</span><span class="w"> </span><span class="n">ptr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">it</span><span class="o">-&gt;</span><span class="n">second</span><span class="p">.</span><span class="n">back</span><span class="p">();</span>
+<a id="__codelineno-23-15" name="__codelineno-23-15" href="#__codelineno-23-15"></a><span class="w">            </span><span class="n">it</span><span class="o">-&gt;</span><span class="n">second</span><span class="p">.</span><span class="n">pop_back</span><span class="p">();</span>
+<a id="__codelineno-23-16" name="__codelineno-23-16" href="#__codelineno-23-16"></a><span class="w">            </span><span class="n">bytes_reused</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">count</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">4</span><span class="p">;</span>
+<a id="__codelineno-23-17" name="__codelineno-23-17" href="#__codelineno-23-17"></a><span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="n">ptr</span><span class="p">;</span>
+<a id="__codelineno-23-18" name="__codelineno-23-18" href="#__codelineno-23-18"></a><span class="w">        </span><span class="p">}</span>
+<a id="__codelineno-23-19" name="__codelineno-23-19" href="#__codelineno-23-19"></a><span class="w">        </span><span class="n">bytes_allocated</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">count</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">4</span><span class="p">;</span>
+<a id="__codelineno-23-20" name="__codelineno-23-20" href="#__codelineno-23-20"></a><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="p">(</span><span class="kt">float</span><span class="o">*</span><span class="p">)</span><span class="n">malloc</span><span class="p">(</span><span class="n">count</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">sizeof</span><span class="p">(</span><span class="kt">float</span><span class="p">));</span>
+<a id="__codelineno-23-21" name="__codelineno-23-21" href="#__codelineno-23-21"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-23-22" name="__codelineno-23-22" href="#__codelineno-23-22"></a>
+<a id="__codelineno-23-23" name="__codelineno-23-23" href="#__codelineno-23-23"></a><span class="w">    </span><span class="c1">// release() takes a plain float* -- a raw pointer, not an owned value.</span>
+<a id="__codelineno-23-24" name="__codelineno-23-24" href="#__codelineno-23-24"></a><span class="w">    </span><span class="c1">// Nothing about this signature stops the same pointer from being</span>
+<a id="__codelineno-23-25" name="__codelineno-23-25" href="#__codelineno-23-25"></a><span class="w">    </span><span class="c1">// passed in twice, or read from again afterward.</span>
+<a id="__codelineno-23-26" name="__codelineno-23-26" href="#__codelineno-23-26"></a><span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">release</span><span class="p">(</span><span class="kt">float</span><span class="o">*</span><span class="w"> </span><span class="n">ptr</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">count</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-23-27" name="__codelineno-23-27" href="#__codelineno-23-27"></a><span class="w">        </span><span class="n">free_lists</span><span class="p">[</span><span class="n">count</span><span class="p">].</span><span class="n">push_back</span><span class="p">(</span><span class="n">ptr</span><span class="p">);</span>
+<a id="__codelineno-23-28" name="__codelineno-23-28" href="#__codelineno-23-28"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-23-29" name="__codelineno-23-29" href="#__codelineno-23-29"></a><span class="p">};</span>
+<a id="__codelineno-23-30" name="__codelineno-23-30" href="#__codelineno-23-30"></a>
+<a id="__codelineno-23-31" name="__codelineno-23-31" href="#__codelineno-23-31"></a><span class="kt">int</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-23-32" name="__codelineno-23-32" href="#__codelineno-23-32"></a><span class="w">    </span><span class="n">printf</span><span class="p">(</span><span class="s">"=== Section 11.4: what release()'s raw-pointer signature does not prevent ===</span><span class="se">\n</span><span class="s">"</span><span class="p">);</span>
+<a id="__codelineno-23-33" name="__codelineno-23-33" href="#__codelineno-23-33"></a><span class="w">    </span><span class="n">DeviceMemoryPool</span><span class="w"> </span><span class="n">pool</span><span class="p">;</span>
+<a id="__codelineno-23-34" name="__codelineno-23-34" href="#__codelineno-23-34"></a>
+<a id="__codelineno-23-35" name="__codelineno-23-35" href="#__codelineno-23-35"></a><span class="w">    </span><span class="kt">float</span><span class="o">*</span><span class="w"> </span><span class="n">activations</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pool</span><span class="p">.</span><span class="n">acquire</span><span class="p">(</span><span class="mi">128</span><span class="p">);</span>
+<a id="__codelineno-23-36" name="__codelineno-23-36" href="#__codelineno-23-36"></a><span class="w">    </span><span class="n">printf</span><span class="p">(</span><span class="s">"acquired activations = %p</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="kt">void</span><span class="o">*</span><span class="p">)</span><span class="n">activations</span><span class="p">);</span>
+<a id="__codelineno-23-37" name="__codelineno-23-37" href="#__codelineno-23-37"></a>
+<a id="__codelineno-23-38" name="__codelineno-23-38" href="#__codelineno-23-38"></a><span class="w">    </span><span class="c1">// A caller bug: release the same pointer twice. Nothing in release()'s</span>
+<a id="__codelineno-23-39" name="__codelineno-23-39" href="#__codelineno-23-39"></a><span class="w">    </span><span class="c1">// signature -- a plain float*, not an owned/consumed value -- rejects</span>
+<a id="__codelineno-23-40" name="__codelineno-23-40" href="#__codelineno-23-40"></a><span class="w">    </span><span class="c1">// this at compile time or catches it at run time.</span>
+<a id="__codelineno-23-41" name="__codelineno-23-41" href="#__codelineno-23-41"></a><span class="w">    </span><span class="n">pool</span><span class="p">.</span><span class="n">release</span><span class="p">(</span><span class="n">activations</span><span class="p">,</span><span class="w"> </span><span class="mi">128</span><span class="p">);</span>
+<a id="__codelineno-23-42" name="__codelineno-23-42" href="#__codelineno-23-42"></a><span class="w">    </span><span class="n">pool</span><span class="p">.</span><span class="n">release</span><span class="p">(</span><span class="n">activations</span><span class="p">,</span><span class="w"> </span><span class="mi">128</span><span class="p">);</span>
+<a id="__codelineno-23-43" name="__codelineno-23-43" href="#__codelineno-23-43"></a><span class="w">    </span><span class="n">printf</span><span class="p">(</span><span class="s">"released the SAME pointer twice -- compiled and ran without complaint</span><span class="se">\n</span><span class="s">"</span><span class="p">);</span>
+<a id="__codelineno-23-44" name="__codelineno-23-44" href="#__codelineno-23-44"></a>
+<a id="__codelineno-23-45" name="__codelineno-23-45" href="#__codelineno-23-45"></a><span class="w">    </span><span class="c1">// The free list for size 128 now holds the identical address twice.</span>
+<a id="__codelineno-23-46" name="__codelineno-23-46" href="#__codelineno-23-46"></a><span class="w">    </span><span class="kt">float</span><span class="o">*</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pool</span><span class="p">.</span><span class="n">acquire</span><span class="p">(</span><span class="mi">128</span><span class="p">);</span>
+<a id="__codelineno-23-47" name="__codelineno-23-47" href="#__codelineno-23-47"></a><span class="w">    </span><span class="kt">float</span><span class="o">*</span><span class="w"> </span><span class="n">b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pool</span><span class="p">.</span><span class="n">acquire</span><span class="p">(</span><span class="mi">128</span><span class="p">);</span>
+<a id="__codelineno-23-48" name="__codelineno-23-48" href="#__codelineno-23-48"></a><span class="w">    </span><span class="n">printf</span><span class="p">(</span><span class="s">"acquire(128) #1 -&gt; %p</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="kt">void</span><span class="o">*</span><span class="p">)</span><span class="n">a</span><span class="p">);</span>
+<a id="__codelineno-23-49" name="__codelineno-23-49" href="#__codelineno-23-49"></a><span class="w">    </span><span class="n">printf</span><span class="p">(</span><span class="s">"acquire(128) #2 -&gt; %p</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="kt">void</span><span class="o">*</span><span class="p">)</span><span class="n">b</span><span class="p">);</span>
+<a id="__codelineno-23-50" name="__codelineno-23-50" href="#__codelineno-23-50"></a><span class="w">    </span><span class="n">printf</span><span class="p">(</span><span class="s">"are they the same address? %s</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="n">a</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">b</span><span class="p">)</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="s">"true -- ALIASED"</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="s">"false"</span><span class="p">);</span>
+<a id="__codelineno-23-51" name="__codelineno-23-51" href="#__codelineno-23-51"></a>
+<a id="__codelineno-23-52" name="__codelineno-23-52" href="#__codelineno-23-52"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">a</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">b</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-23-53" name="__codelineno-23-53" href="#__codelineno-23-53"></a><span class="w">        </span><span class="n">printf</span><span class="p">(</span><span class="s">"writing through 'a' now silently corrupts whatever 'b' is used for,</span><span class="se">\n</span><span class="s">"</span><span class="p">);</span>
+<a id="__codelineno-23-54" name="__codelineno-23-54" href="#__codelineno-23-54"></a><span class="w">        </span><span class="n">printf</span><span class="p">(</span><span class="s">"and vice versa -- two live tensors sharing one buffer, neither aware of it.</span><span class="se">\n</span><span class="s">"</span><span class="p">);</span>
+<a id="__codelineno-23-55" name="__codelineno-23-55" href="#__codelineno-23-55"></a><span class="w">        </span><span class="n">a</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0f</span><span class="p">;</span>
+<a id="__codelineno-23-56" name="__codelineno-23-56" href="#__codelineno-23-56"></a><span class="w">        </span><span class="n">b</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">2.0f</span><span class="p">;</span>
+<a id="__codelineno-23-57" name="__codelineno-23-57" href="#__codelineno-23-57"></a><span class="w">        </span><span class="n">printf</span><span class="p">(</span><span class="s">"after a[0]=1.0 then b[0]=2.0: a[0]=%f b[0]=%f (both read back the same memory)</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span><span class="w"> </span><span class="n">a</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="w"> </span><span class="n">b</span><span class="p">[</span><span class="mi">0</span><span class="p">]);</span>
+<a id="__codelineno-23-58" name="__codelineno-23-58" href="#__codelineno-23-58"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-23-59" name="__codelineno-23-59" href="#__codelineno-23-59"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<a id="__codelineno-23-60" name="__codelineno-23-60" href="#__codelineno-23-60"></a><span class="p">}</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>nvcc<span class="w"> </span>-arch<span class="o">=</span>sm_80<span class="w"> </span>04_raii_and_pointer_safety.cu<span class="w"> </span>-o<span class="w"> </span>04_raii_and_pointer_safety
+<a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>./04_raii_and_pointer_safety
+</code></pre></div>
+<h2 id="chapter-summary">Chapter Summary<a class="headerlink" href="#chapter-summary" title="Permanent link">&para;</a></h2>
+<p><code>RefCountedBuffer&lt;T&gt;</code> generalizes Chapter 6's single-owner <code>Tensor</code> and Chapter 7.2's never-owning <code>TensorView</code> into genuine shared ownership: a counter incremented on every copy and decremented on every destruction, so that whichever live copy happens to see the count reach zero is correctly the one that frees the buffer, traced end to end through a three-step lifetime (<code>1 → 2 → 1 → 0</code>) and genuinely compiled and run to confirm it. <code>Arena</code> trades that per-copy bookkeeping for a bump-pointer scheme — one addition and a 256-byte alignment mask per allocation, chosen to match <code>cudaMalloc</code>'s own guarantee rather than an arbitrary round number, verified by hand and by execution against the chapter's own <code>0 → 400 → 512 → 712</code> offset sequence — with individual frees replaced entirely by one bulk <code>reset()</code>, at the cost of a bounds check (<code>assert</code>) genuinely shown, in two compiled binaries, to abort cleanly in a debug build and vanish silently in a release build. <code>DeviceMemoryPool</code> trades the <em>allocation itself</em> for reuse, bucketing released buffers by exact element count and reaching a hit rate of exactly <code>0.667</code> after three steps — but the struct has no destructor at all, and a tracked-allocation counter directly measured the resulting leak at exactly one outstanding buffer for the pool's entire lifetime, rather than merely asserting one exists. Section 11.4 then took the chapter's own closing safety claim at face value and broke it on purpose: releasing the same raw pointer twice compiles and runs without complaint, and the next two <code>acquire()</code> calls genuinely return the identical address to two unrelated callers — a real, printed, observed aliasing bug, not a hypothetical one, arising directly from <code>release()</code>'s plain-pointer signature carrying no ownership information at all.</p>
+<h2 id="self-check-questions">Self-Check Questions<a class="headerlink" href="#self-check-questions" title="Permanent link">&para;</a></h2>
+<ol>
+<li><code>RefCountedBuffer&lt;float&gt; a(10)</code>, then <code>RefCountedBuffer&lt;float&gt; b(a)</code>, then <code>RefCountedBuffer&lt;float&gt; c(b)</code>. In what order would the refcount need to reach <code>0</code> for the underlying buffer to be freed, and does it matter which of <code>a</code>, <code>b</code>, or <code>c</code> goes out of scope last?</li>
+<li>An <code>Arena</code> with <code>offset = 300</code> receives a request for <code>20</code> <code>float</code>s (<code>80</code> bytes). Compute <code>(300 + 255) &amp; ~255</code> by hand the way Worked Example 11.2.1 did, state the resulting aligned offset, and state how many bytes of padding were skipped.</li>
+<li>Worked Example 11.2.2 compiled the identical <code>Arena::alloc</code> call in a debug build and an <code>-DNDEBUG</code> release build. Explain concretely what <code>NDEBUG</code> changes about the compiled program, and why the release build's silent continuation is arguably more dangerous than the debug build's abort, even though the debug build is the one that crashes.</li>
+<li>A <code>DeviceMemoryPool</code> is created, used for several <code>acquire</code>/<code>release</code> cycles across two distinct sizes, and then goes out of scope. Trace what happens to (a) the <code>std::unordered_map</code> and <code>std::vector</code> bookkeeping structures inside <code>free_lists</code>, and (b) the actual buffers those structures were holding pointers to. Are both reclaimed?</li>
+<li>Worked Example 11.4.1 released the same pointer twice and then observed two <code>acquire()</code> calls return the identical address. Explain, in terms of what kind of type a raw <code>float*</code> is in C++, why nothing at the type-system level catches this — and describe concretely what would have to change about <code>acquire</code>/<code>release</code>'s signatures for a double-release like this to fail to compile instead.</li>
+</ol>
+<h2 id="where-we-go-next">Where We Go Next<a class="headerlink" href="#where-we-go-next" title="Permanent link">&para;</a></h2>
+<p>Chapter 12 (<code>part2/01-element-wise-operations.md</code>) is the first chapter of Part 2, and builds the first real tensor operations directly on top of the memory story this chapter completed: single ownership from Chapter 6 for the common case, <code>RefCountedBuffer&lt;T&gt;</code> from Section 11.1 wherever an operation's result needs to alias rather than copy, and the <code>Arena</code>/<code>DeviceMemoryPool</code> machinery from Sections 11.2–11.3 wherever an operation's intermediate results are cheap to churn through and expensive to allocate one at a time — with Section 11.4's aliasing bug now a named, understood risk rather than a surprise waiting in Part 2's first kernel launch.</p>
+<h2 id="worked-solutions">Worked Solutions<a class="headerlink" href="#worked-solutions" title="Permanent link">&para;</a></h2>
+<p><strong>1.</strong> The refcount starts at <code>1</code> when <code>a</code> is constructed, becomes <code>2</code> when <code>b(a)</code> runs the copy constructor, and becomes <code>3</code> when <code>c(b)</code> runs it again. It needs to count down from <code>3</code> to <code>0</code> — through <code>2</code>, then <code>1</code>, then <code>0</code> — for the buffer to free, and each step happens whenever any one of the three currently-live copies has its destructor run, regardless of which variable that copy is bound to. It does <em>not</em> matter which of <code>a</code>, <code>b</code>, or <code>c</code> happens to go out of scope last — the shared counter, not the specific variable, determines when the buffer is actually freed; whichever copy's destructor sees the count reach <code>0</code> is correctly the one that calls <code>free()</code>.</p>
+<p><strong>2.</strong> <code>(300 + 255) &amp; ~255 = 555 &amp; ~255</code>. <code>555 = 2×256 + 43</code>, so clearing the low 8 bits removes the <code>43</code> and leaves <code>512</code>. The aligned offset is <code>512</code>, and the padding skipped is <code>512 - 300 = 212</code> bytes — within the <code>0</code>-to-<code>255</code>-byte range Worked Example 11.2.2 established as the maximum possible waste per allocation.</p>
+<p><strong>3.</strong> <code>NDEBUG</code> is a preprocessor macro that <code>&lt;cassert&gt;</code>'s <code>assert</code> macro checks: when <code>NDEBUG</code> is defined, every <code>assert(condition)</code> call in the translation unit is replaced with nothing at all before the compiler even sees an expression to evaluate — not a no-op check, but literally absent from the compiled binary. This is why the debug build's crash, alarming as it looks, is the <em>safer</em> outcome: it stops execution immediately, at the exact call site, with a message naming the failed condition, before any bad pointer is ever dereferenced. The release build's silent continuation is more dangerous precisely because nothing about its output signals a problem — <code>wrote p[0] = 3.140000 without any detected error</code> looks identical to a completely correct run, and the actual consequence (a pointer whose bookkeeping already exceeds its arena's capacity, live and returned to the caller) only surfaces later, at some unrelated point where corrupted memory is finally read back, far from the <code>alloc()</code> call that actually caused it.</p>
+<p><strong>4.</strong> The <code>std::unordered_map</code> and <code>std::vector</code> bookkeeping structures are reclaimed: the compiler's synthesized default destructor for <code>DeviceMemoryPool</code> tears down <code>free_lists</code> using <code>std::unordered_map</code>'s own destructor, which in turn destroys each <code>std::vector&lt;float*&gt;</code>, freeing the array that held the pointer <em>values</em> (addresses) themselves. The actual buffers those addresses pointed to are not reclaimed: a raw <code>float*</code> has no destructor that calls <code>free()</code> on itself, so tearing down the vector of addresses simply discards the addresses — it never issues the free call those addresses would need for the underlying allocations to actually be released. Only (a) happens; (b) is the leak Section 11.3 measured directly via <code>g_outstanding_allocations</code>.</p>
+<p><strong>5.</strong> A raw <code>float*</code> in C++ is a trivially copyable, unmanaged pointer type with no ownership semantics attached to it at all — copying it, passing it by value, or handing it to a function like <code>release(float* ptr, int count)</code> is indistinguishable, at the type-system level, from copying an <code>int</code>. <code>release()</code> takes <code>ptr</code> as an ordinary (non-owning) parameter, meaning the call passes a <em>copy</em> of the address, not a value the caller gives up — nothing about calling <code>pool.release(activations, 128)</code> a second time invalidates <code>activations</code> or prevents the identical call from compiling and running again. For a double-release like Worked Example 11.4.1's to fail to compile instead, <code>acquire</code>/<code>release</code> would need to work with a type the compiler actually tracks ownership of — for instance, <code>acquire</code> returning a move-only handle (a small wrapper, in the spirit of this chapter's own <code>RefCountedBuffer&lt;T&gt;</code>, or <code>std::unique_ptr</code>-style semantics) whose value is <em>consumed</em> by <code>release()</code> rather than merely read, so that a second attempt to release the same handle would be rejected at compile time as a use of an already-moved-from object, rather than silently succeeding at run time the way a bare pointer allows.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../05-device-abstraction-layer/" class="md-footer__link md-footer__link--prev" aria-label="Previous: 10. Device Abstraction Layer">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                10. Device Abstraction Layer
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../../part2/01-element-wise-operations/" class="md-footer__link md-footer__link--next" aria-label="Next: 12. Element-wise Operations">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                12. Element-wise Operations
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; 2026 Oluwaseyi Awoga
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/maximumbeings" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.top", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
