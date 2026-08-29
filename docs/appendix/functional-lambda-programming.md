@@ -9,6 +9,7 @@
 - Two genuine, nvcc-enforced restrictions on extended lambdas this appendix's own compile history ran into by attempting the natural-looking code first: reference capture is rejected outright, and a lambda cannot be defined inside a function with a deduced (`auto`) return type — both shown here as the actual compiler diagnostic, not a paraphrase of the documentation.
 - Why a hand-written functor (`operator()`) and a lambda's compiler-synthesized closure are, to a template, indistinguishable — and why that fact is exactly what lets Thrust-era functor code and modern lambda code both compile against the same generic kernels.
 - Why `std::function` — the ordinary, universal C++ way to hold "some callable, any callable" — categorically cannot cross onto the device, demonstrated with the real, two-part nvcc error it produces.
+- What capture-by-value and capture-by-reference actually *do*, on plain, CPU-only C++ with no CUDA involved at all — the exact distinction Section D.4's device-side restriction exists to rule out — including a lambda whose by-value capture still carries its own persistent, mutable state, and a genuine `AddressSanitizer`-caught crash from the one capture mode Section D.4 forbids on the device.
 
 ## What you need to know first
 
@@ -353,9 +354,129 @@ Every `pipeline(x)` value was checked against `(2x+1)²` computed directly, not 
 
 **[COMMON TRAP]** It's tempting to conclude "extended lambdas can't be composed." What actually can't happen is returning one from a function whose return type is `auto`. A `compose` written with an explicit trailing return type (`auto compose(F f, G g) -> SomeExplicitLambdaType`) would face the same restriction in a different disguise, because the underlying rule is about the *enclosing function's* return type being deduced, not about composition as a concept — the `Composed<F, G>` functor above is simply the version of "compose two callables" that never triggers the rule at all.
 
-## D.9 Complete Runnable Code
+## D.9 Capture by Value vs. Capture by Reference, Genuinely Run on the CPU `[FOUNDATIONAL]`
 
-Every kernel and host function this appendix derived, assembled in one place. Compiled genuinely with `nvcc -arch=sm_80 --extended-lambda`, each file below independently, exactly as Sections D.1–D.8 describe; the two files demonstrating genuine compiler errors (Sections D.2 and D.4's reference-capture case, and D.7) are intentionally **not** valid, complete programs — they reproduce the exact minimal code that fails, for the exact reason stated in the section that shows their error text.
+### Intuition
+
+Section D.4 showed a real compiler error and stopped there: an extended lambda cannot capture by reference, full stop, no device-side example to compare against. That leaves an honest gap — *why* the restriction exists is easiest to see by watching capture-by-value and capture-by-reference actually differ, which requires nothing CUDA-specific at all. Every file in this section is plain, host-only C++, compiled with `g++`, no `nvcc`, no `--extended-lambda`, no kernel anywhere — the ordinary language feature Section D.1 built on top of, examined on its own terms.
+
+The core distinction: `[x]` copies `x`'s *value* into the closure at the moment the lambda is created — the closure now owns an independent copy, unaffected by whatever happens to the original `x` afterward. `[&x]` instead stores `x`'s *address* — the closure has no copy of its own, and reading through it later reads whatever the original variable currently holds, including changes made after the lambda was created.
+
+### Worked Example D.9.1 — A snapshot vs. a live view of the same variable
+
+```cpp
+int counter = 0;
+auto by_value = [counter]() { return counter; };   // copies counter's value NOW
+auto by_ref   = [&counter]() { return counter; };  // stores counter's ADDRESS
+```
+
+Genuinely captured, `g++ -std=c++17 -Wall -Wextra`, no CUDA toolchain involved:
+
+```
+counter = 0
+by_value() = 0   (captured a copy when the lambda was created)
+by_ref()   = 0   (reads through a reference to the live variable)
+
+counter changed to 100 AFTER both lambdas were created:
+by_value() = 0   (unchanged -- its copy was made before the change)
+by_ref()   = 100   (sees the change -- it was never holding its own copy)
+```
+
+Both lambdas were created while `counter` was still `0`; both correctly reported `0` at that moment. The divergence only appears *after* `counter = 100` runs — `by_value` cannot see it at all, because nothing connects its private copy back to the original variable, while `by_ref` was never holding a copy to begin with.
+
+### Worked Example D.9.2 — A by-value capture can still carry its own mutable state
+
+A common misreading of `[x]` is "the lambda can never change." What it actually means is narrower: the lambda cannot change the *original* `x`. Its own copy, marked `mutable`, can change freely across repeated calls, persisting inside the closure between calls the same way a member variable persists across method calls on an object:
+
+```cpp
+int x = 5;
+auto increment_own_copy = [x]() mutable { x++; return x; };
+```
+
+Genuinely captured:
+
+```
+x = 5 (the original, untouched throughout this part)
+increment_own_copy() call 1: 6
+increment_own_copy() call 2: 7
+increment_own_copy() call 3: 8
+x is still: 5
+```
+
+Contrast this with the reference-capture equivalent, which mutates the *original* variable directly, no `mutable` keyword needed (there is no closure-owned copy to protect from its own `operator()` in the first place):
+
+```cpp
+int y = 5;
+auto increment_original = [&y]() { y++; return y; };
+```
+
+Genuinely captured:
+
+```
+y = 5
+increment_original() call 1: 6
+increment_original() call 2: 7
+increment_original() call 3: 8
+y is now: 8 (the original itself was mutated three times)
+```
+
+`increment_own_copy` and `increment_original` look almost identical at the call site — both are called with `()`, both return an incrementing sequence `6, 7, 8` — but only one of them ever touches the variable a reader can see outside the lambda. This is precisely the ambiguity Section D.4's device-side ban removes entirely for device code: on the device, every capture is by value, so there is never a question of whether calling a kernel's captured callable might reach back and mutate something the host still holds a live handle to.
+
+### Worked Example D.9.3 — Default capture modes on several variables at once
+
+`[=]` copies every variable the lambda body uses; `[&]` takes a reference to every one of them; both apply uniformly, not variable-by-variable:
+
+```cpp
+int a = 1, b = 2, c = 3;
+auto snapshot_all = [=]() { return a + b + c; };
+auto live_all      = [&]() { return a + b + c; };
+```
+
+Genuinely captured, before and after reassigning all three variables:
+
+```
+a=1 b=2 c=3 -> snapshot_all()=6 live_all()=6
+a=10 b=20 c=30 -> snapshot_all()=6 live_all()=60
+```
+
+`snapshot_all` reports the sum as it stood the instant the lambda was constructed (`1+2+3=6`) forever afterward; `live_all` recomputes against whatever `a`, `b`, and `c` currently hold, reporting `10+20+30=60` once they change — the same value-vs-reference distinction as Worked Example D.9.1, now shown to apply uniformly across a default-capture list rather than one variable at a time.
+
+### Worked Example D.9.4 — The dangling-reference trap, caught by a real sanitizer
+
+Section D.4's device-side restriction exists because capture-by-reference has exactly one failure mode host code is equally capable of producing: a closure that outlives the variable it references. A function returning a lambda that captures one of its own *parameters* by reference produces precisely this — the parameter's storage is gone the instant the function returns, and the returned closure is left holding a reference to memory it no longer owns:
+
+```cpp
+std::function<int()> make_dangling_lambda(int local_value) {
+    return [&local_value]() { return local_value; };   // captures the PARAMETER by reference
+}
+```
+
+This is undefined behavior, which means its numeric output cannot honestly be reported as a fixed, reproducible number — the whole point of UB is that the language makes no promise about what happens next. What *can* be genuinely, reproducibly shown is a real tool built specifically to catch this class of bug: compiling with `-fsanitize=address` (AddressSanitizer) and calling the resulting closure. Genuinely captured, `g++ -std=c++17 -fsanitize=address -g`, trimmed to the diagnostic's own header and stack trace:
+
+```
+==ERROR: AddressSanitizer: stack-use-after-return on address 0x... at pc 0x... bp 0x... sp 0x...
+READ of size 4 at 0x... thread T0
+    #0 ... in operator() 09_dangling_reference_capture.cpp:14
+    #1 ... in __invoke_impl<int, make_dangling_lambda(int)::<lambda()>&> .../bits/invoke.h:61
+    ...
+    #5 ... in main 09_dangling_reference_capture.cpp:20
+
+Address 0x... is located in stack of thread T0 at offset 48 in frame
+    #0 ... in make_dangling_lambda(int) 09_dangling_reference_capture.cpp:13
+
+  This frame has 2 object(s):
+    [48, 52) 'local_value' (line 13) <== Memory access at offset 48 is inside this variable
+
+SUMMARY: AddressSanitizer: stack-use-after-return 09_dangling_reference_capture.cpp:14 in operator()
+```
+
+AddressSanitizer's own diagnosis names the exact failure by its real technical term — "stack-use-after-return" — and traces it to the exact line (`09_dangling_reference_capture.cpp:14`, the lambda's `operator()` reading `local_value`) and the exact variable (`'local_value' (line 13)`) that no longer exists by the time it's read. This is genuinely reproducible: the sanitizer's *diagnosis* is deterministic (the same bug, caught the same way, every run), even though the plain, unsanitized program's raw numeric output would not be.
+
+**[COMMON TRAP]** It's tempting to run `09_dangling_reference_capture.cpp` *without* AddressSanitizer and treat whatever number comes out as "the answer" — on many systems, stack memory that was just vacated is often still physically intact for a short window, so it's entirely possible to see `42` print out looking correct. That outcome would be a coincidence of how the stack happens to be laid out on one specific compiler, optimization level, and run — not a guarantee, and not something this book will report as a "genuine result" the way every other worked example in this appendix does, because it isn't one. The sanitizer's diagnosis above is the only part of this worked example being reported as reproducible fact.
+
+## D.10 Complete Runnable Code
+
+Every kernel and host function this appendix derived, assembled in one place. Files `01` through `05` and the two error-only files are compiled genuinely with `nvcc -arch=sm_80 --extended-lambda`, exactly as Sections D.1–D.8 describe; files `08` and `09` (Section D.9) are plain, CPU-only C++ with no CUDA involved, compiled genuinely with `g++ -std=c++17` instead. The three files demonstrating genuine failures (Sections D.2 and D.4's reference-capture case, D.7, and D.9's dangling-reference case) are intentionally **not** well-behaved, complete programs — they reproduce the exact minimal code that fails, or that only sanitizer instrumentation can safely diagnose, for the exact reason stated in the section that shows their diagnostic text.
 
 ### File: `01_extended_lambda_basics.cu` (Section D.1)
 
@@ -558,7 +679,54 @@ int main() {
 }
 ```
 
-### The two error-only files, reproduced for completeness
+### File: `08_capture_value_vs_reference.cpp` (Section D.9, CPU-only — compiled with `g++`, not `nvcc`)
+
+```cpp
+#include <cstdio>
+
+int main() {
+    int counter = 0;
+    auto by_value = [counter]() { return counter; };
+    auto by_ref   = [&counter]() { return counter; };
+    printf("by_value()=%d by_ref()=%d\n", by_value(), by_ref());
+    counter = 100;
+    printf("after counter=100: by_value()=%d by_ref()=%d\n", by_value(), by_ref());
+
+    int x = 5;
+    auto increment_own_copy = [x]() mutable { x++; return x; };
+    printf("%d %d %d (x still %d)\n", increment_own_copy(), increment_own_copy(), increment_own_copy(), x);
+
+    int y = 5;
+    auto increment_original = [&y]() { y++; return y; };
+    printf("%d %d %d (y now %d)\n", increment_original(), increment_original(), increment_original(), y);
+
+    int a = 1, b = 2, c = 3;
+    auto snapshot_all = [=]() { return a + b + c; };
+    auto live_all      = [&]() { return a + b + c; };
+    a = 10; b = 20; c = 30;
+    printf("snapshot_all()=%d live_all()=%d\n", snapshot_all(), live_all());
+    return 0;
+}
+```
+
+### File: `09_dangling_reference_capture.cpp` (Section D.9, CPU-only — compiled with `g++ -fsanitize=address`)
+
+```cpp
+#include <cstdio>
+#include <functional>
+
+std::function<int()> make_dangling_lambda(int local_value) {
+    return [&local_value]() { return local_value; };   // captures the PARAMETER by reference
+}
+
+int main() {
+    auto dangling = make_dangling_lambda(42);
+    printf("result: %d\n", dangling());   // AddressSanitizer catches this read; see Section D.9
+    return 0;
+}
+```
+
+### The two error-only CUDA files, reproduced for completeness
 
 `06_global_lambda_reference_trap.cu` (Section D.2) — fails to compile, by design:
 
@@ -588,7 +756,7 @@ There is no single combined run to reproduce here — Worked Examples D.1.1 thro
 
 ## Chapter Summary
 
-An extended lambda is an ordinary C++ closure with a `__device__` or `__host__ __device__` annotation written directly on it, enabled by `--extended-lambda`; a lambda defined *inside* a kernel inherits callability from its enclosing context with no extra ceremony, but a namespace-scope lambda *object* is still an ordinary host global regardless of what its type's call operator claims, genuinely producing `error: identifier "..." is undefined in device code` when a kernel reaches for it directly. The idiom that actually works — and this appendix's central technique — is a kernel template taking a callable as an ordinary by-value parameter: `transform_kernel<F>` compiled cleanly for three unrelated single-argument operations, and `reduce_kernel<T, Op>` compiled cleanly for four unrelated *binary* operations (sum `39`, max `9`, min `1`, product `60,480` on the same eight-value array, each independently checked), because a template's callable parameter is resolved at compile time with no shared global object required. A hand-written functor and a lambda's compiler-synthesized closure are the same shape to a template — `transform_kernel<F>` accepted `SquareFunctor{}` with zero code changes — which is why Thrust-era functor code and modern lambda code both compose against the same generic machinery. Two restrictions nvcc enforces at compile time, not at runtime, were both hit directly rather than only cited: reference-capturing an extended lambda is rejected outright (`cannot capture variables by reference`), and defining one inside a function with a deduced (`auto`) return type is rejected too (`must not have deduced return type`) — the second one's fix, returning an explicit `Composed<F, G>` functor instead of an `auto`-deduced lambda, follows directly from this appendix's own functor-versus-lambda equivalence rather than being an arbitrary workaround. `std::function`, by contrast, cannot reach the device at all, for a structural reason rather than a fixable restriction: its generality depends on host-heap type erasure and host vtables device code has no access to, producing a real, two-part compiler error the moment it's tried.
+An extended lambda is an ordinary C++ closure with a `__device__` or `__host__ __device__` annotation written directly on it, enabled by `--extended-lambda`; a lambda defined *inside* a kernel inherits callability from its enclosing context with no extra ceremony, but a namespace-scope lambda *object* is still an ordinary host global regardless of what its type's call operator claims, genuinely producing `error: identifier "..." is undefined in device code` when a kernel reaches for it directly. The idiom that actually works — and this appendix's central technique — is a kernel template taking a callable as an ordinary by-value parameter: `transform_kernel<F>` compiled cleanly for three unrelated single-argument operations, and `reduce_kernel<T, Op>` compiled cleanly for four unrelated *binary* operations (sum `39`, max `9`, min `1`, product `60,480` on the same eight-value array, each independently checked), because a template's callable parameter is resolved at compile time with no shared global object required. A hand-written functor and a lambda's compiler-synthesized closure are the same shape to a template — `transform_kernel<F>` accepted `SquareFunctor{}` with zero code changes — which is why Thrust-era functor code and modern lambda code both compose against the same generic machinery. Two restrictions nvcc enforces at compile time, not at runtime, were both hit directly rather than only cited: reference-capturing an extended lambda is rejected outright (`cannot capture variables by reference`), and defining one inside a function with a deduced (`auto`) return type is rejected too (`must not have deduced return type`) — the second one's fix, returning an explicit `Composed<F, G>` functor instead of an `auto`-deduced lambda, follows directly from this appendix's own functor-versus-lambda equivalence rather than being an arbitrary workaround. `std::function`, by contrast, cannot reach the device at all, for a structural reason rather than a fixable restriction: its generality depends on host-heap type erasure and host vtables device code has no access to, producing a real, two-part compiler error the moment it's tried. Section D.9 steps back to plain, CPU-only C++ to show exactly what Section D.4's restriction is protecting device code from: `[x]` copies a value at closure-creation time (later changes to the original are invisible to it, though a `mutable` by-value capture can still carry its own persistent state across calls), while `[&x]` stores an address and reads the live variable every time, including a closure returned from a function whose local it referenced — genuinely caught here not as a guessed-at number but as AddressSanitizer's own real "stack-use-after-return" diagnosis, naming the exact line and variable.
 
 ## Self-Check Questions
 
@@ -597,6 +765,7 @@ An extended lambda is an ordinary C++ closure with a `__device__` or `__host__ _
 3. Section D.7 shows `std::function` cannot be called from device code. Could a `std::function` still be a *host-side* parameter to a function that *also*, separately, launches a kernel — and if so, what would the actual boundary be between what the `std::function` is allowed to touch and what the kernel is allowed to touch?
 4. Section D.8's `Composed<F, G>` struct stores `F f` and `G g` as plain (non-reference) members. Using Section D.4's reasoning, explain why this by-value storage is what makes `Composed<F, G>` itself safe to pass to a kernel, even though `compose()`'s two arguments could themselves be lambdas that captured other things by value.
 5. Write the one-line change to `reduce_kernel`'s call site that would make Worked Example D.6.1 compute the **average** of the eight values instead of the sum, without modifying `reduce_kernel` itself.
+6. Worked Example D.9.4's `make_dangling_lambda` captures its parameter by reference. Write the one-word change to that lambda's capture list that would make the function safe to call, and explain in one sentence why that specific change fixes it while changing nothing else about the function's signature or behavior for the caller.
 
 ## Where We Go Next
 
@@ -613,3 +782,5 @@ This appendix closes this book's coverage of how an *operation* — not just dat
 **4.** `Composed<F, G>` stores `F f` and `G g` by value, meaning constructing a `Composed<F, G>` object makes independent copies of whichever closures `f` and `g` are — exactly Section D.4's rule applied one level up. If those inner closures (say, `scale2` and `add_one`) each captured their own state by value (as every closure in this appendix does), then `Composed<F, G>`'s copies of them are just as self-contained and device-safe as the originals were on their own; nesting them inside another by-value-storing struct doesn't introduce any reference or host address that wasn't already ruled out at the leaves. Had `Composed` instead stored `F& f` and `G& g` by reference, it would reintroduce exactly the hazard Section D.4 forbids — a device-side call reading through a reference to a host stack object — which is why `Composed`'s member types are plain `F`/`G`, not `F&`/`G&`.
 
 **5.** Divide the sum by the count after reduction, at the call site, without touching `reduce_kernel` at all: `float average = reduce_host(data, 8, sum_op, 0.0f) / 8.0f;` (or, for the device kernel, dividing `out[blockIdx.x]` by the block's element count after the launch). `reduce_kernel<T, Op>` itself has no concept of "average" and needs none — it only ever computes one fold of `op` across the data, and the specific reduction (sum, and now sum-then-divide for average) lives entirely in what the caller does with `op`, `identity`, and the result, exactly the separation of concerns Section D.6 establishes.
+
+**6.** Change `[&local_value]` to `[local_value]` — dropping the `&` switches the capture from by-reference to by-value, so the returned closure copies `local_value`'s value into its own closure at the moment `make_dangling_lambda` runs, instead of storing the address of a parameter that is about to go out of scope. This fixes it because the caller-visible behavior is completely unchanged (the function still takes an `int` and returns a `std::function<int()>` that reports it) — only the *internal* storage of that value moves from "a reference to something that won't exist" to "an independent copy that travels with the closure," exactly the same value-vs-reference distinction Worked Example D.9.1 demonstrates on a much smaller, non-dangerous example.
