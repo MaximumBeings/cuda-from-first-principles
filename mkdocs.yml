@@ -92,6 +92,7 @@ nav:
       - "A. Installation & Setup": appendix/installation-setup.md
       - "B. Practice Quiz": appendix/practice-quiz.md
       - "C. CUDA Memory Architecture": appendix/cuda-memory-architecture.md
+      - "D. C++ Functional and Lambda Programming": appendix/functional-lambda-programming.md
 
 extra:
   social:
