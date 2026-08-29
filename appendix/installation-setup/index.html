@@ -1459,6 +1459,24 @@
         
       
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    A. Installation & Setup
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <a href="./" class="md-nav__link md-nav__link--active">
         
   
@@ -1475,6 +1493,69 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#local-machine-with-an-nvidia-gpu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Local machine with an NVIDIA GPU
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#no-local-nvidia-gpu-cloud-instances-and-honest-fallback-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        No local NVIDIA GPU: cloud instances and honest fallback behavior
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#version-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Version notes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#building-this-books-own-documentation-site" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Building this book's own documentation site
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
       
     </li>
   
@@ -1564,6 +1645,58 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#local-machine-with-an-nvidia-gpu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Local machine with an NVIDIA GPU
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#no-local-nvidia-gpu-cloud-instances-and-honest-fallback-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        No local NVIDIA GPU: cloud instances and honest fallback behavior
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#version-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Version notes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#building-this-books-own-documentation-site" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Building this book's own documentation site
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -1580,7 +1713,36 @@
 
 
 <h1 id="appendix-a-installation-setup">Appendix A: Installation &amp; Setup<a class="headerlink" href="#appendix-a-installation-setup" title="Permanent link">&para;</a></h1>
-<p><em>Not yet written.</em></p>
+<h2 id="local-machine-with-an-nvidia-gpu">Local machine with an NVIDIA GPU<a class="headerlink" href="#local-machine-with-an-nvidia-gpu" title="Permanent link">&para;</a></h2>
+<p>Every kernel in this book is written and explained against a compute-capability 8.0 (Ampere, e.g. A100) target and compiled with <code>-arch=sm_80</code> throughout — that's the one thing to match if you want the exact <code>nvcc</code>/<code>cuobjdump</code>/<code>nm</code> output this book's own chapters and appendices show. Anything Turing (<code>sm_75</code>) or newer will compile and run every example correctly; only the SASS disassembly listings in chapters that inspect compiled instructions directly may look slightly different on a different architecture.</p>
+<p>Install the CUDA Toolkit for your distribution from NVIDIA's own installer (the exact steps vary by OS and package manager, so this book intentionally doesn't try to replace <a href="https://developer.nvidia.com/cuda-downloads">NVIDIA's own CUDA Toolkit download page</a>). Once installed, confirm both halves of the toolchain are visible before going any further:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>nvidia-smi
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>nvcc<span class="w"> </span>--version
+</code></pre></div>
+<p><code>nvidia-smi</code> reports the driver and the GPU the driver sees; <code>nvcc --version</code> reports the CUDA compiler's own version, which is not always the same number <code>nvidia-smi</code> shows (the driver can support a newer CUDA version than the toolkit installed alongside it, and vice versa within limits). If either command fails, fix that before compiling anything in this book — every chapter assumes both are already working.</p>
+<p>Compile and run this book's kernels the same way every chapter's own compile block shows:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>nvcc<span class="w"> </span>-arch<span class="o">=</span>sm_80<span class="w"> </span>some_example.cu<span class="w"> </span>-o<span class="w"> </span>some_example
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>./some_example
+</code></pre></div>
+<p>Chapters that inspect compiled machine code directly (register counts, spill bytes, SASS instructions) add extra flags on top of this baseline — <code>-Xptxas -v</code> for register/spill reporting, <code>-lineinfo</code> plus <code>cuobjdump --dump-sass</code> for disassembly — each introduced inline, at the point in the book where it first matters.</p>
+<h2 id="no-local-nvidia-gpu-cloud-instances-and-honest-fallback-behavior">No local NVIDIA GPU: cloud instances and honest fallback behavior<a class="headerlink" href="#no-local-nvidia-gpu-cloud-instances-and-honest-fallback-behavior" title="Permanent link">&para;</a></h2>
+<p>Any CUDA-enabled cloud instance works — a single consumer or datacenter GPU is enough for every example in this book. A typical setup on a fresh Ubuntu instance with the CUDA Toolkit already provisioned by the image:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>nvidia-smi
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>nvcc<span class="w"> </span>--version
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/MaximumBeings/cuda-from-first-principles.git
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="nb">cd</span><span class="w"> </span>cuda-from-first-principles
+</code></pre></div>
+<p>If you're reading this appendix with no GPU at all — the exact situation this book's own later chapters and its Appendix C were written under — every Runtime API call this book makes (<code>cudaMalloc</code>, <code>cudaMallocManaged</code>, <code>cudaMemcpyToSymbol</code>, <code>cudaOccupancyMaxActiveBlocksPerMultiprocessor</code>, and so on) still compiles and runs; it simply, honestly reports <code>cudaErrorNoDevice</code> instead of succeeding. That failure mode is deliberate and load-bearing for this book's own methodology from Chapter 18 onward: rather than skip examples that need a device, later chapters run them anyway and show you the real, unedited error a Runtime API call returns with no GPU present, alongside independently hand-verified or host-computed arithmetic proving the surrounding logic is correct regardless. You do not need a GPU to read or follow this book end to end — you need one only to see a kernel's numbers actually come back from a device instead of a documented, cited reference figure.</p>
+<h2 id="version-notes">Version notes<a class="headerlink" href="#version-notes" title="Permanent link">&para;</a></h2>
+<p>This book targets CUDA 12.x and compute capability 8.0 (<code>-arch=sm_80</code>) throughout, chosen because it's old enough to be broadly available on cheap cloud instances and new enough to support every feature this book uses, including the WMMA tensor-core API in Appendix C.7. Nothing here depends on a version-specific CUDA language feature introduced after CUDA 11 — if your toolkit is newer, everything still compiles; if you're on an older toolkit, check <code>nvcc --version</code> against a specific chapter's compile block before assuming a mismatch is the problem, since most build failures at that point come from a missing <code>-arch</code> flag rather than a genuine version incompatibility.</p>
+<h2 id="building-this-books-own-documentation-site">Building this book's own documentation site<a class="headerlink" href="#building-this-books-own-documentation-site" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/MaximumBeings/cuda-from-first-principles.git
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nb">cd</span><span class="w"> </span>cuda-from-first-principles
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>python3<span class="w"> </span>-m<span class="w"> </span>venv<span class="w"> </span>.venv<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">source</span><span class="w"> </span>.venv/bin/activate
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>pip<span class="w"> </span>install<span class="w"> </span>mkdocs-material
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>mkdocs<span class="w"> </span>serve
+</code></pre></div>
+<p><code>mkdocs serve</code> builds no CUDA code — it only renders the markdown in <code>docs/</code> into the site you're reading now. None of the commands above need a GPU; only the compile-and-run steps earlier in this appendix do.</p>
 
 
 
