@@ -91,6 +91,7 @@ nav:
   - Appendix:
       - "A. Installation & Setup": appendix/installation-setup.md
       - "B. Practice Quiz": appendix/practice-quiz.md
+      - "C. CUDA Memory Architecture": appendix/cuda-memory-architecture.md
 
 extra:
   social:
