@@ -93,6 +93,8 @@ nav:
       - "B. Practice Quiz": appendix/practice-quiz.md
       - "C. CUDA Memory Architecture": appendix/cuda-memory-architecture.md
       - "D. C++ Functional and Lambda Programming": appendix/functional-lambda-programming.md
+      - "E. The SM as a Pipeline and the Tiling Payoff": appendix/sm-pipeline-tiling.md
+      - "F. C++ Lambda Functions, From First Principles": appendix/cpp-lambda-functions.md
 
 extra:
   social:
