@@ -9,8 +9,10 @@
 - All five special member functions of the C++ Rule of Five — destructor, copy constructor, copy assignment, move constructor, move assignment — implemented correctly for the same struct, with every one of the five genuinely exercised and its effect independently checked (pointer identity, nulled sources, freed old resources), not merely asserted.
 - Why the identical Rule of Five pattern applies to a `cudaMalloc`'d device buffer, and why — unlike `Point2D` — a struct wrapping device memory is necessarily host-only, a direct consequence of `cudaMalloc`/`cudaFree` being host-side Runtime API entry points rather than a stylistic choice.
 - How to verify Rule-of-Five behavior for device memory honestly in a sandbox with no GPU, where every `cudaMalloc` call fails and every pointer is null — by switching from comparing addresses (which would trivially and misleadingly show everything "equal") to counting API calls (evidence that survives every allocation failing).
+- Why the self-assignment and self-move guards in every copy/move assignment operator above actually matter — tested, not just written, by removing each guard in turn and observing two genuinely different failure modes (silent data corruption from copying uninitialized memory onto itself, and silent data loss from one assignment's own statements overwriting each other), neither of which AddressSanitizer's heap checks catch.
+- The Rule of Zero — wrapping an owned resource in something that already manages itself correctly (`std::vector` in place of a raw `new[]`'d array) so the compiler's default special members become safe again, with zero hand-written members, exactly as they already were for `Point2D`.
 - Value-at-Risk and its variants — simulated/historical, parametric (variance-covariance), and Conditional VaR/Expected Shortfall — computed on the same GBM machinery Chapter 22.4 already established, with the CVaR ≥ VaR invariant checked genuinely rather than assumed.
-- XVA and its variants — CVA, DVA, and FVA — built from a genuine exposure profile (`EE(t)`/`ENE(t)`) extracted from checkpointed Monte Carlo paths of a forward contract, cross-checked against the closed-form GBM mean, plus an honest scope note on MVA and KVA.
+- XVA and its variants — CVA, DVA, and FVA — built from a genuine exposure profile (`EE(t)`/`ENE(t)`) extracted from checkpointed Monte Carlo paths of a forward contract, cross-checked against the closed-form GBM mean, plus honest scope notes on MVA/KVA and on wrong-way risk.
 
 ## What you need to know first
 
@@ -248,6 +250,130 @@ h.paths is now: (nil) (nullptr, so h's destructor will free nothing)
 
 Every one of the five members is exercised, not merely written: copy construction is checked against Section G.2's own failure mode (`a.paths == b.paths` is now `false`, and mutating `b` genuinely leaves `a` untouched); move construction is checked by comparing `d.paths` against a pointer value captured *before* the move (`d` ends up with exactly the address `c` originally held, and `c` is left null); copy assignment is checked by confirming the target's `count` and `paths` genuinely change to match the source, independently; move assignment is checked the same way move construction was, against a captured pre-move pointer. ASan's silence — a clean run with no reports — is itself evidence: this exact resource-ownership shape, exercised through all five paths, produces no double free, no leak, and no use-after-free.
 
+### Worked Example G.3.2 — Self-assignment and self-move: the guards, actually tested
+
+Both `operator=` overloads above open with `if (this == &other) return *this;`, but nothing in Worked Example G.3.1 ever writes `a = a` or `b = std::move(b)` — the two cases that guard exists for. Claiming the guard matters without ever triggering the case it guards against is exactly the kind of unverified claim this book avoids elsewhere; this section closes that gap, on the correct struct and on two deliberately un-guarded variants of it.
+
+```cpp
+RiskPathBuffer a(5);
+float* a_ptr_before = a.paths;
+a = a;   // self copy-assignment
+// ... a.paths and a.count come back unchanged
+
+RiskPathBuffer b(7);
+float* b_ptr_before = b.paths;
+b = std::move(b);   // self move-assignment
+// ... b.paths and b.count come back unchanged
+```
+
+Genuinely compiled and run:
+
+```
+--- Guarded RiskPathBuffer: a = a (self copy-assignment) ---
+a.paths unchanged: true (0x503000000040 -> 0x503000000040)
+a.count unchanged: true (5)
+
+--- Guarded RiskPathBuffer: b = std::move(b) (self move-assignment) ---
+b.paths unchanged: true (0x503000000070 -> 0x503000000070)
+b.count unchanged: true (7)
+```
+
+Both guards work exactly as claimed. `g++` itself flags the literal self-move at compile time — `warning: moving 'b' of type 'RiskPathBuffer' to itself [-Wself-move]` — a genuine, unedited compiler warning worth noting rather than suppressing: the compiler is telling you this exact call pattern is suspicious enough to warn about even though, here, the guard makes it safe.
+
+Now the same two operations, on structs whose copy and move assignment are identical to `RiskPathBuffer`'s *except* for the missing guard:
+
+```cpp
+struct UnguardedCopyBuffer {
+    float* paths;
+    int count;
+    // ... constructor, destructor identical to RiskPathBuffer ...
+    UnguardedCopyBuffer& operator=(const UnguardedCopyBuffer& other) {
+        // NO "if (this == &other) return *this;" guard here.
+        delete[] paths;
+        count = other.count;
+        paths = new float[count];
+        std::memcpy(paths, other.paths, count * sizeof(float));
+        return *this;
+    }
+};
+```
+
+The expectation going in was a heap-use-after-free, the same failure Section G.2 caught — `delete[] paths` frees the resource, and since `other` and `*this` are the same object for `x = x`, `other.paths` should be reading through the same, now-dangling pointer. That is **not** what genuinely happened:
+
+```
+--- UNGUARDED copy assignment: x = x (no self-assignment guard) ---
+x.paths BEFORE self-assignment: 0.0 1.0 2.0 3.0
+x.paths AFTER  self-assignment: -0.4 -0.4 -0.4 -0.4
+(NOT a crash, and NOT what was expected going in -- see the explanation below)
+```
+
+No ASan report, no crash — and the reason is worth tracing exactly, since assuming the "obvious" bug without checking would have been a genuine fabrication. `other` and `*this` are the same object, so `other.paths` is just another *name* for `x.paths`. By the time `paths = new float[count];` executes, that line has already overwritten `other.paths` too — they're the same variable. So the following `memcpy(paths, other.paths, ...)` copies the brand-new, **uninitialized** allocation onto itself, not the freed original — a real bug (the original values `0,1,2,3` are genuinely destroyed, replaced with allocator garbage), but a silent-corruption bug, not a use-after-free. AddressSanitizer's heap checks have nothing invalid to catch here — the pointer being read is perfectly valid, just uninitialized; a tool for uninitialized-read detection (e.g. MemorySanitizer) is the one that would flag this specific case.
+
+The unguarded *move* case, run as its own program (the copy case above doesn't crash, but keeping them separate mirrors how Section G.2's crash forced a process boundary):
+
+```cpp
+UnguardedMoveBuffer& operator=(UnguardedMoveBuffer&& other) noexcept {
+    // NO "if (this == &other) return *this;" guard here.
+    delete[] paths;
+    paths = other.paths;
+    count = other.count;
+    other.paths = nullptr;
+    other.count = 0;
+    return *this;
+}
+```
+
+```
+=== UNGUARDED move assignment: y = std::move(y) (no self-move guard) ===
+
+before self-move: y.paths=0x503000000040, y.count=6
+after  self-move: y.paths=(nil), y.count=0
+```
+
+Again, no crash and no ASan report — a *third* distinct failure mode. `delete[] paths` frees the buffer; `paths = other.paths` reads the (already-freed, but not-yet-nulled) pointer value back into itself, harmless in isolation; but the next line, `other.paths = nullptr`, operates on the *same* object, so it immediately overwrites the assignment that just happened. The object silently ends up empty — `count=0`, `paths=nullptr` — instead of unchanged. Arguably the most dangerous of the three failure modes shown across this appendix (Section G.2's double free, this section's uninitialized-data corruption, and this silent emptying): nothing here ever touches invalid memory, so no sanitizer this book has used would ever catch it — only a value quietly discarded.
+
+> `[COMMON TRAP]` It's tempting to assume every self-assignment bug looks like Section G.2's double free — a crash a sanitizer catches. This section's two unguarded variants show two *different* failure modes, neither of which AddressSanitizer flags at all: silent corruption from copying uninitialized memory onto itself, and silent data loss from one assignment's own two statements stepping on each other. The guard's job isn't "prevent a crash" specifically — it's "prevent `other` and `*this` from ever being treated as two different objects when they're actually the same one," and the specific way that assumption breaks depends entirely on the exact statements in the assignment operator's body.
+
+### Worked Example G.3.3 — The Rule of Zero: making the default safe again
+
+Section G.1 established that `Point2D`'s compiler-generated copy is safe because it owns nothing beyond two plain `float`s. The **Rule of Zero** is the observation that this situation can be *engineered back into existence* for a resource-owning struct too: wrap the resource in something that already manages itself correctly, and the compiler's defaults become correct again, exactly as they were for `Point2D` — with zero hand-written special members, not five carefully-written ones.
+
+```cpp
+struct RiskPathBufferV2 {
+    std::vector<float> paths;   // NOT a raw pointer
+
+    RiskPathBufferV2(int n) : paths(n) {
+        for (int i = 0; i < n; i++) paths[i] = (float)i;
+    }
+    // No destructor, no copy constructor, no copy assignment, no move
+    // constructor, no move assignment written ANYWHERE in this struct.
+};
+```
+
+Genuinely compiled and run:
+
+```
+--- copy construction: still deep, still independent -- for free ---
+a.paths.data() == b.paths.data()? false (deep copy: must be false)
+after b.paths[0]=999: a.paths[0]=0.0 (untouched), b.paths[0]=999.0
+
+--- move construction: still steals the buffer, still nulls the source -- for free ---
+d.paths.data() == c's ORIGINAL pointer? true
+c.paths.size() after move: 0 (empty -- std::vector's own move leaves the source valid but empty)
+
+--- self-assignment and self-move: SAFE, with no guard written anywhere ---
+e.paths.data() unchanged after e=e: true
+e.paths[0..3] after e=e: 0.0 1.0 2.0 3.0  (still 0,1,2,3 -- NOT corrupted,
+unlike Worked Example G.3.2's UnguardedCopyBuffer, because std::vector's own
+assignment operator was written by people who already solved this problem)
+```
+
+Every property Section G.3.1 spent five hand-written functions establishing — deep-copy independence, correct pointer transfer on move, a nulled-but-valid moved-from source — comes back identically here, all five inherited for free from `std::vector<float>`'s own, already-correct Rule of Five, itself written once by the standard library instead of once per struct that needs it. Section G.3.2's self-assignment corruption doesn't reappear either: `std::vector`'s own `operator=` already handles `e = e` correctly internally, which is exactly why `e.paths[0..3]` reads back `0,1,2,3` unchanged rather than the garbage Worked Example G.3.2's `UnguardedCopyBuffer` produced.
+
+This does not make Section G.3's hand-written version pointless — Section G.4's `GPUPathBuffer` genuinely cannot use this trick, because there is no `std::vector`-equivalent standard container for `cudaMalloc`'d device memory to delegate to (a hand-rolled thin RAII wrapper around `cudaMalloc`/`cudaFree` would itself need exactly Section G.4's five members, just written once and reused). The Rule of Zero and the Rule of Five are not competitors — the Rule of Zero is what the Rule of Five is *for*: writing the five correctly, once, inside whatever wrapper type a codebase reuses, so that everything built on top of it gets to follow the Rule of Zero instead.
+
+> `[COMMON TRAP]` It's tempting to read the Rule of Zero as "you never need the Rule of Five." Someone has to write the five correctly at least once — `std::vector`'s own implementation is not exempt from Section G.3's reasoning, it simply already did the work Section G.3 did by hand. A codebase with no resource-owning type more primitive than `std::vector`/`std::unique_ptr` can follow the Rule of Zero everywhere; a codebase that talks to `cudaMalloc` directly, the way Section G.4 does, needs at least one hand-written Rule of Five at the boundary.
+
 ## G.4 The Rule of Five for Device Memory: `GPUPathBuffer` `[FOUNDATIONAL]`
 
 ### Intuition
@@ -332,9 +458,21 @@ c.device_paths after move: (nil) (nullptr -- c's destructor will call cudaFree(n
   [move assign] g_cudaMalloc_calls still 5 -- no allocation/copy needed
 cudaMalloc calls: before move-assign=5, after=5 (move assignment allocates nothing)
 f.device_paths after move: (nil) (nullptr -- f's destructor will call cudaFree(nullptr))
+
+--- copy assignment: the ONE member left unexercised above -- does IT call cudaMalloc too? ---
+  [ctor]        count=9, cudaMalloc call #6: cudaErrorNoDevice
+  [ctor]        count=3, cudaMalloc call #7: cudaErrorNoDevice
+  [copy assign] cudaMalloc call #8: cudaErrorNoDevice, cudaMemcpy(D2D): cudaErrorNoDevice
+cudaMalloc calls: before copy-assign=7, after=8 (copy assignment allocates exactly ONE new buffer)
+g_obj.count is now: 3 (was 9, now matches h_obj's count)
+
+--- self-assignment and self-move: safe with the guard, genuinely exercised ---
+  [ctor]        count=42, cudaMalloc call #9: cudaErrorNoDevice
+after i_obj=i_obj: device_paths unchanged=true, cudaMalloc calls unchanged=true (9->9)
+after i_obj=std::move(i_obj): device_paths unchanged=true, count unchanged=true (42)
 ```
 
-The call count rises by exactly one for every copy (construction or assignment) and by exactly zero for every move — the honest, sandbox-appropriate evidence that this struct's copy path genuinely allocates a new, independent device buffer while its move path genuinely does not, regardless of whether any individual `cudaMalloc` call succeeds. `cudaFree(nullptr)` is a documented no-op in the CUDA Runtime API, which is exactly why nulling a moved-from `device_paths` is safe, the same role `nullptr` plays for `delete[]` on the host in Section G.3.
+The call count rises by exactly one for every copy (construction or assignment) and by exactly zero for every move — the honest, sandbox-appropriate evidence that this struct's copy path genuinely allocates a new, independent device buffer while its move path genuinely does not, regardless of whether any individual `cudaMalloc` call succeeds. `cudaFree(nullptr)` is a documented no-op in the CUDA Runtime API, which is exactly why nulling a moved-from `device_paths` is safe, the same role `nullptr` plays for `delete[]` on the host in Section G.3. The copy-assignment run closes the one gap the earlier four demonstrations left open — every one of the five members is now genuinely exercised for `GPUPathBuffer`, not four of five — and the self-assignment/self-move run confirms `GPUPathBuffer`'s own guards behave identically to `RiskPathBuffer`'s in Worked Example G.3.2: unchanged pointer, unchanged call count, unchanged `count`.
 
 **[COMMON TRAP]** Comparing `device_paths` addresses directly here (`a.device_paths == b.device_paths`) would print `true` for *every* pair of objects in this sandbox, because every allocation fails and every pointer is null — a result that looks like "the bug from Section G.2 is still present" when the real explanation is simply "there's no GPU." Evidence has to be chosen with the actual environment in mind, not copy-pasted from a technique that happened to work in a different one.
 
@@ -486,6 +624,8 @@ Two independent checks confirm the exposure profile itself before any credit or 
 `DVA` comes out smaller than `CVA` here specifically because the bank's own hazard rate (`1%`) was set lower than the counterparty's (`2%`) — a better-credit bank has a smaller DVA, all else equal, since DVA scales with the bank's *own* probability of defaulting. The net adjustment, `-CVA + DVA - FVA = -0.087`, is a genuine, if small, negative adjustment to this particular trade's value under these particular assumptions.
 
 **Scope note — MVA and KVA.** Margin Valuation Adjustment (the funding cost of posting initial margin under bilateral or cleared margin rules) and Capital Valuation Adjustment (the cost of holding regulatory capital against the trade) are real, widely-quoted XVA variants alongside CVA/DVA/FVA above. Both require inputs this appendix does not model — an initial-margin schedule for MVA, a regulatory capital profile and cost-of-equity rate for KVA — so, honestly: they are named and defined here, not computed, rather than approximated with inputs invented for the occasion.
+
+**Scope note — wrong-way risk.** The CVA formula above treats `EE(t)` and the counterparty's default probability as independent — `EE(tᵢ)` is computed once from the exposure profile, then multiplied by a survival-probability *difference* that never depends on which path produced that exposure. Real counterparties frequently violate this: **wrong-way risk** is the case where a counterparty's own default probability *rises* precisely when the bank's exposure to them is rising too (the standard example: an oil producer as the counterparty on a contract whose value depends on oil prices, where a sustained oil-price move that increases the bank's exposure is also exactly the scenario that stresses the producer's own credit). Modeling this genuinely requires coupling the hazard rate to the simulated path itself — computing a path-dependent `λ_C(t, S)` rather than the single flat `λ_C` used above — which this appendix does not build. The CVA figure computed here is therefore the *independent-exposure* baseline the industry starts from, not a wrong-way-risk-adjusted figure; where wrong-way risk is material, the real CVA is larger than what a flat-hazard model like this one reports.
 
 **[COMMON TRAP]** It's tempting to compute CVA using the *terminal* exposure alone (`EE(T)`) rather than the full profile. That would ignore every default scenario before maturity — a counterparty that defaults at `t=0.25` when `EE(0.25)=4.37` is a genuinely different (and, here, smaller) loss than one that defaults at `T` when `EE(T)=9.66`, which is exactly why CVA is a *sum over the exposure profile*, weighted by the probability of default arriving in each specific interval, rather than a single point evaluated once.
 
@@ -793,7 +933,215 @@ int main() {
     printf("f.device_paths after move: %p (nullptr -- f's destructor will call cudaFree(nullptr))\n\n",
            (void*)f.device_paths);
 
+    printf("--- copy assignment: the ONE member left unexercised above -- does IT call cudaMalloc too? ---\n");
+    GPUPathBuffer g_obj(9);
+    GPUPathBuffer h_obj(3);
+    int calls_before_copy_assign = g_cudaMalloc_calls;
+    g_obj = h_obj;
+    int calls_after_copy_assign = g_cudaMalloc_calls;
+    printf("cudaMalloc calls: before copy-assign=%d, after=%d (copy assignment allocates exactly ONE new buffer)\n",
+           calls_before_copy_assign, calls_after_copy_assign);
+    printf("g_obj.count is now: %d (was 9, now matches h_obj's count)\n\n", g_obj.count);
+
+    printf("--- self-assignment and self-move: safe with the guard, genuinely exercised ---\n");
+    GPUPathBuffer i_obj(42);
+    float* i_ptr_before = i_obj.device_paths;
+    int calls_before_self = g_cudaMalloc_calls;
+    i_obj = i_obj;
+    printf("after i_obj=i_obj: device_paths unchanged=%s, cudaMalloc calls unchanged=%s (%d->%d)\n",
+           (i_obj.device_paths == i_ptr_before) ? "true" : "false",
+           (g_cudaMalloc_calls == calls_before_self) ? "true" : "false",
+           calls_before_self, g_cudaMalloc_calls);
+    i_obj = std::move(i_obj);
+    printf("after i_obj=std::move(i_obj): device_paths unchanged=%s, count unchanged=%s (%d)\n\n",
+           (i_obj.device_paths == i_ptr_before) ? "true" : "false",
+           (i_obj.count == 42) ? "true" : "false", i_obj.count);
+
     printf("(destructors for all live objects run automatically below, as main returns)\n");
+    return 0;
+}
+```
+
+### File: `07_self_assignment_self_move.cpp` (Worked Example G.3.2)
+
+```cpp
+#include <cstdio>
+#include <cstring>
+#include <utility>
+
+struct RiskPathBuffer {
+    float* paths;
+    int count;
+
+    RiskPathBuffer(int n) : count(n) {
+        paths = new float[n];
+        for (int i = 0; i < n; i++) paths[i] = (float)i;
+    }
+    ~RiskPathBuffer() { delete[] paths; }
+
+    RiskPathBuffer(const RiskPathBuffer& other) : count(other.count) {
+        paths = new float[count];
+        std::memcpy(paths, other.paths, count * sizeof(float));
+    }
+    RiskPathBuffer& operator=(const RiskPathBuffer& other) {
+        if (this == &other) return *this;
+        delete[] paths;
+        count = other.count;
+        paths = new float[count];
+        std::memcpy(paths, other.paths, count * sizeof(float));
+        return *this;
+    }
+    RiskPathBuffer(RiskPathBuffer&& other) noexcept : paths(other.paths), count(other.count) {
+        other.paths = nullptr;
+        other.count = 0;
+    }
+    RiskPathBuffer& operator=(RiskPathBuffer&& other) noexcept {
+        if (this == &other) return *this;
+        delete[] paths;
+        paths = other.paths;
+        count = other.count;
+        other.paths = nullptr;
+        other.count = 0;
+        return *this;
+    }
+};
+
+// The SAME copy-assignment logic, but WITHOUT the self-assignment guard.
+struct UnguardedCopyBuffer {
+    float* paths;
+    int count;
+
+    UnguardedCopyBuffer(int n) : count(n) {
+        paths = new float[n];
+        for (int i = 0; i < n; i++) paths[i] = (float)i;
+    }
+    ~UnguardedCopyBuffer() { delete[] paths; }
+
+    UnguardedCopyBuffer& operator=(const UnguardedCopyBuffer& other) {
+        // NO "if (this == &other) return *this;" guard here.
+        delete[] paths;
+        count = other.count;
+        paths = new float[count];
+        std::memcpy(paths, other.paths, count * sizeof(float));
+        return *this;
+    }
+};
+
+int main() {
+    printf("=== Self-assignment and self-move: guarded (correct) vs. unguarded (buggy) ===\n\n");
+
+    printf("--- Guarded RiskPathBuffer: a = a (self copy-assignment) ---\n");
+    RiskPathBuffer a(5);
+    float* a_ptr_before = a.paths;
+    a = a;
+    printf("a.paths unchanged: %s (%p -> %p)\n", (a.paths == a_ptr_before) ? "true" : "false",
+           (void*)a_ptr_before, (void*)a.paths);
+    printf("a.count unchanged: %s (%d)\n\n", (a.count == 5) ? "true" : "false", a.count);
+
+    printf("--- Guarded RiskPathBuffer: b = std::move(b) (self move-assignment) ---\n");
+    RiskPathBuffer b(7);
+    float* b_ptr_before = b.paths;
+    b = std::move(b);
+    printf("b.paths unchanged: %s (%p -> %p)\n", (b.paths == b_ptr_before) ? "true" : "false",
+           (void*)b_ptr_before, (void*)b.paths);
+    printf("b.count unchanged: %s (%d)\n\n", (b.count == 7) ? "true" : "false", b.count);
+
+    printf("--- UNGUARDED copy assignment: x = x (no self-assignment guard) ---\n");
+    UnguardedCopyBuffer x(4);
+    printf("x.paths BEFORE self-assignment: %.1f %.1f %.1f %.1f\n", x.paths[0], x.paths[1], x.paths[2], x.paths[3]);
+    x = x;
+    printf("x.paths AFTER  self-assignment: %.1f %.1f %.1f %.1f\n", x.paths[0], x.paths[1], x.paths[2], x.paths[3]);
+    printf("(NOT a crash, and NOT what was expected going in -- see the appendix text)\n\n");
+
+    return 0;
+}
+```
+
+### File: `07b_unguarded_self_move.cpp` (Worked Example G.3.2)
+
+```cpp
+#include <cstdio>
+#include <utility>
+
+struct UnguardedMoveBuffer {
+    float* paths;
+    int count;
+
+    UnguardedMoveBuffer(int n) : count(n) {
+        paths = new float[n];
+        for (int i = 0; i < n; i++) paths[i] = (float)i;
+    }
+    ~UnguardedMoveBuffer() { delete[] paths; }
+
+    UnguardedMoveBuffer& operator=(UnguardedMoveBuffer&& other) noexcept {
+        // NO "if (this == &other) return *this;" guard here.
+        delete[] paths;
+        paths = other.paths;
+        count = other.count;
+        other.paths = nullptr;
+        other.count = 0;
+        return *this;
+    }
+};
+
+int main() {
+    printf("=== UNGUARDED move assignment: y = std::move(y) (no self-move guard) ===\n\n");
+
+    UnguardedMoveBuffer y(6);
+    printf("before self-move: y.paths=%p, y.count=%d\n", (void*)y.paths, y.count);
+    y = std::move(y);
+    printf("after  self-move: y.paths=%p, y.count=%d\n\n", (void*)y.paths, y.count);
+
+    printf("no crash, no ASan report -- a silent-emptying failure mode, not a use-after-free.\n");
+    return 0;
+}
+```
+
+### File: `08_rule_of_zero.cpp` (Worked Example G.3.3)
+
+```cpp
+#include <cstdio>
+#include <vector>
+#include <utility>
+
+struct RiskPathBufferV2 {
+    std::vector<float> paths;
+
+    RiskPathBufferV2(int n) : paths(n) {
+        for (int i = 0; i < n; i++) paths[i] = (float)i;
+    }
+    // No destructor, no copy constructor, no copy assignment, no move
+    // constructor, no move assignment written ANYWHERE in this struct.
+};
+
+int main() {
+    printf("=== The Rule of Zero: RiskPathBufferV2, zero hand-written special members ===\n\n");
+
+    printf("--- copy construction: still deep, still independent -- for free ---\n");
+    RiskPathBufferV2 a(5);
+    RiskPathBufferV2 b = a;
+    printf("a.paths.data() == b.paths.data()? %s (deep copy: must be false)\n",
+           (a.paths.data() == b.paths.data()) ? "true" : "false");
+    b.paths[0] = 999.0f;
+    printf("after b.paths[0]=999: a.paths[0]=%.1f (untouched), b.paths[0]=%.1f\n\n",
+           a.paths[0], b.paths[0]);
+
+    printf("--- move construction: still steals the buffer, still nulls the source -- for free ---\n");
+    RiskPathBufferV2 c(3);
+    const float* c_original_ptr = c.paths.data();
+    RiskPathBufferV2 d = std::move(c);
+    printf("d.paths.data() == c's ORIGINAL pointer? %s\n", (d.paths.data() == c_original_ptr) ? "true" : "false");
+    printf("c.paths.size() after move: %zu (empty -- std::vector's own move leaves the source valid but empty)\n\n",
+           c.paths.size());
+
+    printf("--- self-assignment and self-move: SAFE, with no guard written anywhere ---\n");
+    RiskPathBufferV2 e(4);
+    const float* e_ptr_before = e.paths.data();
+    e = e;
+    printf("e.paths.data() unchanged after e=e: %s\n", (e.paths.data() == e_ptr_before) ? "true" : "false");
+    printf("e.paths[0..3] after e=e: %.1f %.1f %.1f %.1f\n\n",
+           e.paths[0], e.paths[1], e.paths[2], e.paths[3]);
+
     return 0;
 }
 ```
@@ -1034,11 +1382,11 @@ int main() {
 
 ### Expected Output
 
-Each file's genuine output is embedded inline in its own section above (G.1–G.6). All six files compile cleanly — `01_point2d_kernel.cu` and `04_gpu_buffer_rule_of_five.cu` with `nvcc -arch=sm_80`, the other four with `g++ -std=c++17 -Wall -Wextra` (`02` and `03` additionally with `-fsanitize=address -g`) — with zero warnings across all six.
+Each file's genuine output is embedded inline in its own section above (G.1–G.6). All nine files compile cleanly — `01_point2d_kernel.cu` and `04_gpu_buffer_rule_of_five.cu` with `nvcc -arch=sm_80`, the other seven with `g++ -std=c++17 -Wall -Wextra` (`02`, `03`, `07`, and `07b` additionally with `-fsanitize=address -g`) — with zero warnings across all nine, except `07_self_assignment_self_move.cpp` and `07b_unguarded_self_move.cpp` each producing their own single, expected `-Wself-move` warning on their deliberate `std::move`-onto-itself lines, discussed inline in Worked Example G.3.2 rather than suppressed.
 
 ## Chapter Summary
 
-`Point2D`'s compiler-generated copy constructor is safe for exactly one reason: it owns nothing beyond the two `float`s it directly contains, so copying those two numbers twice produces two fully independent, correct objects — demonstrated in Section G.1 both on the host and by constructing `Point2D` objects directly inside a `__global__` kernel using its existing `__host__ __device__` methods, unchanged. The moment a struct owns a resource instead — Section G.2's `RiskPathBuffer`, wrapping a `new[]`'d array — the identical compiler-generated copy stops being safe, copying a pointer instead of the memory it addresses, and genuinely triggers a `heap-use-after-free` under AddressSanitizer the instant the first copy's destructor runs. The Rule of Five fixes this by making all five special members explicit: Section G.3 implements destructor, copy constructor, copy assignment, move constructor, and move assignment for the same struct, each one genuinely exercised and independently checked — deep-copy independence, a stolen-and-nulled moved-from pointer, a freed old resource before a new one is taken on. Section G.4 applies the identical pattern to a `cudaMalloc`'d device buffer, with one structural difference that is a direct consequence of what the struct owns rather than a stylistic choice: `cudaMalloc`/`cudaFree` are host-only Runtime API entry points, so `GPUPathBuffer`'s special members cannot be `__host__ __device__` — and, with no GPU in this sandbox to produce real distinct pointer addresses, verification shifts honestly from address comparison to counting `cudaMalloc` calls, evidence that survives every allocation failing. The same discipline extends into quantitative finance: Section G.5 computes Value-at-Risk two genuinely different ways — a simulated/historical quantile extraction and a closed-form parametric estimate — from the same GBM-simulated data Chapter 22.4 established, landing close but not identical for a specific, checked reason (arithmetic P&L on a log-normal terminal price is only approximately normal), with Conditional VaR's `CVaR ≥ VaR` invariant verified rather than assumed. Section G.6 extends that same machinery to record an exposure profile across time rather than only at maturity, computing CVA, DVA, and FVA from genuine `EE(t)`/`ENE(t)` values cross-checked against the GBM process's own closed-form mean, with an honest scope note that MVA and KVA are named but not computed, since this appendix has no initial-margin schedule or capital profile to model them from.
+`Point2D`'s compiler-generated copy constructor is safe for exactly one reason: it owns nothing beyond the two `float`s it directly contains, so copying those two numbers twice produces two fully independent, correct objects — demonstrated in Section G.1 both on the host and by constructing `Point2D` objects directly inside a `__global__` kernel using its existing `__host__ __device__` methods, unchanged. The moment a struct owns a resource instead — Section G.2's `RiskPathBuffer`, wrapping a `new[]`'d array — the identical compiler-generated copy stops being safe, copying a pointer instead of the memory it addresses, and genuinely triggers a `heap-use-after-free` under AddressSanitizer the instant the first copy's destructor runs. The Rule of Five fixes this by making all five special members explicit: Section G.3 implements destructor, copy constructor, copy assignment, move constructor, and move assignment for the same struct, each one genuinely exercised and independently checked — deep-copy independence, a stolen-and-nulled moved-from pointer, a freed old resource before a new one is taken on. Section G.4 applies the identical pattern to a `cudaMalloc`'d device buffer, with one structural difference that is a direct consequence of what the struct owns rather than a stylistic choice: `cudaMalloc`/`cudaFree` are host-only Runtime API entry points, so `GPUPathBuffer`'s special members cannot be `__host__ __device__` — and, with no GPU in this sandbox to produce real distinct pointer addresses, verification shifts honestly from address comparison to counting `cudaMalloc` calls, evidence that survives every allocation failing, with every one of the five members — including copy assignment, and including self-assignment/self-move — now genuinely exercised. Section G.3's own self-assignment and self-move guards get the same scrutiny in Worked Example G.3.2: removing them doesn't reproduce Section G.2's crash, but produces two different, quieter failures instead — silent corruption from copying a brand-new uninitialized allocation onto itself, and silent data loss from one assignment's own two statements overwriting each other — neither one anything AddressSanitizer's heap checks would catch. Worked Example G.3.3 then shows the Rule of Five is not the only way out: wrapping the owned resource in `std::vector` instead of a raw pointer restores `Point2D`'s original situation — zero hand-written special members, all five (and the two self-assignment guards) correct by construction — the Rule of Zero this book's own `Point2D` example embodied from the very first section without naming it. The same discipline extends into quantitative finance: Section G.5 computes Value-at-Risk two genuinely different ways — a simulated/historical quantile extraction and a closed-form parametric estimate — from the same GBM-simulated data Chapter 22.4 established, landing close but not identical for a specific, checked reason (arithmetic P&L on a log-normal terminal price is only approximately normal), with Conditional VaR's `CVaR ≥ VaR` invariant verified rather than assumed. Section G.6 extends that same machinery to record an exposure profile across time rather than only at maturity, computing CVA, DVA, and FVA from genuine `EE(t)`/`ENE(t)` values cross-checked against the GBM process's own closed-form mean, with honest scope notes that MVA and KVA are named but not computed, since this appendix has no initial-margin schedule or capital profile to model them from, and that the CVA figure itself assumes exposure and counterparty default are independent — real wrong-way risk, where the two are correlated, would make the true CVA larger than what this flat-hazard model reports.
 
 ## Self-Check Questions
 
@@ -1048,6 +1396,8 @@ Each file's genuine output is embedded inline in its own section above (G.1–G.
 4. Section G.5 reports simulated VaR (2.8665) and parametric VaR (2.9309) as "close but not identical," attributing the gap to arithmetic P&L being log-normal rather than normal. If the same VaR calculation were instead applied to LOG-returns (`ln(S_T/S0)`) rather than arithmetic P&L (`S_T - S0`), would you expect the simulated-vs-parametric gap to shrink, grow, or stay about the same? Justify your answer using what GBM assumes is normally distributed by construction.
 5. Section G.6 computes `DVA < CVA` here specifically because the bank's own hazard rate (1%) was set lower than the counterparty's (2%). Using the DVA formula's own structure (`DVA = (1-R_B) * Σᵢ |ENE(tᵢ)| * [Q_B(tᵢ₋₁)-Q_B(tᵢ)] * DF(tᵢ)`), explain what would happen to DVA, holding everything else fixed, if the bank's OWN credit quality got WORSE (a higher hazard rate) — and why a bank's DVA increasing when its own credit gets worse has historically been considered a controversial property of DVA accounting.
 6. Section G.6's exposure profile shows `EE(t)` growing from 4.3690 at `t=0.25` to 9.6584 at `t=1.00`, roughly proportional to `sqrt(t)` rather than growing linearly with `t`. Using what you know about GBM's volatility term (`sigma * sqrt(dt)` in the update step), explain why an at-the-money forward's expected positive exposure would be expected to grow with the SQUARE ROOT of time rather than linearly.
+7. Worked Example G.3.2's `UnguardedCopyBuffer` was expected, going in, to reproduce Section G.2's heap-use-after-free — but genuinely didn't. Explain, using the exact order of statements in its `operator=`, why `other.paths` had already stopped pointing at the freed memory by the time `memcpy` read it — and what SPECIFIC single-line reordering (moving one statement earlier or later, without adding a guard) would make it into a genuine use-after-free instead.
+8. Worked Example G.3.3's `RiskPathBufferV2` gets correct self-assignment behavior (`e = e` leaves `e` unchanged) without writing any guard at all, while Section G.3's `RiskPathBuffer` needs an explicit `if (this == &other) return *this;` to get the same guarantee. Both structs ultimately bottom out in a `new[]`/`delete[]`-based allocation somewhere. Where does `std::vector`'s OWN internal implementation actually solve this problem — does it avoid the issue entirely, or does it just contain the same kind of guard Section G.3 wrote by hand, hidden one layer down?
 
 ## Where We Go Next
 
@@ -1066,3 +1416,7 @@ This appendix closes a loop this book opened with `Point2D` in its main chapters
 **5.** Holding `R_B`, `ENE(t)`, and `DF(t)` fixed, a higher `hazard_own` makes `Q_B(t)` fall faster with time, which makes each `[Q_B(tᵢ₋₁)-Q_B(tᵢ)]` term — the incremental probability of the bank itself defaulting in that specific interval — LARGER, which makes DVA larger. This is exactly the property that has made DVA controversial in practice: it means a bank's own reported earnings can go UP as its own credit quality gets WORSE, since a higher own-default probability increases the "expected gain from extinguishing our own obligations" DVA represents — an accounting outcome many practitioners and regulators have criticized as counterintuitive (a firm should not look more profitable purely because the market believes it is more likely to fail), which is part of why post-financial-crisis accounting and regulatory treatments of DVA have been repeatedly revisited.
 
 **6.** GBM's volatility contribution to each step accumulates through the `sigma * sqrt(dt)` term, and for INDEPENDENT increments, variance is additive across time while standard deviation — the `sqrt` of variance — is not: the standard deviation of the price after time `t` scales with `sqrt(t)`, not `t` itself (this is the same square-root-of-time scaling behind the `sigma_1day = sigma * sqrt(dt)` conversion Section G.5 uses to go from an annual to a 1-day volatility). Since an at-the-money forward's exposure is driven almost entirely by how far `S(t)` has plausibly wandered from `K = S0` — which is governed by that same standard deviation, not the mean drift alone at these parameter magnitudes — `EE(t)`, being roughly proportional to the spread of the distribution at time `t`, inherits that same `sqrt(t)` growth rather than growing linearly, which is exactly the shape the table's own numbers (4.37, 6.43, 8.12, 9.66 at `t=0.25, 0.5, 0.75, 1.0`) trace out.
+
+**7.** The four statements run in this order: `delete[] paths;` frees the old buffer; `count = other.count;` copies an `int`, unaffected by anything freed; `paths = new float[count];` allocates a brand-new buffer and assigns its address into `paths` — and since `other` and `*this` are the same object for `x = x`, this line *also* just changed the value of `other.paths`, because it's the identical variable. Only after that does `memcpy(paths, other.paths, ...)` run, by which point `other.paths` already holds the *new* allocation's address, not the freed one — so the copy reads uninitialized memory, not freed memory. The single-line reordering that WOULD produce a genuine use-after-free: move the `memcpy(...)` call to run *before* `paths = new float[count];`, i.e., swap those two statements. With that swap, at the moment `memcpy` runs, `paths` (and `other.paths`, same variable) still holds the pointer `delete[]` just freed one line earlier — `memcpy(paths, other.paths, ...)` would then read from AND write to that already-freed address, a genuine, ASan-catchable heap-use-after-free on both sides of the copy at once.
+
+**8.** It depends on which specific standard library implementation you read, since the C++ standard requires only that self-assignment leave a `std::vector` unchanged, not any particular technique for guaranteeing it — but the technique real implementations generally favor avoids the issue structurally rather than checking for it explicitly. Instead of Section G.3's order (free the old resource, THEN allocate and copy the new one), a self-assignment-safe copy assignment builds the new state FIRST — allocate fresh storage, copy every element into it — and only releases the OLD storage after the new one is fully and successfully built. Under that ordering, `e = e` never has a moment where `e`'s data has been destroyed before it's been read, because reading happens entirely before anything is freed; no identity check is needed because the two objects being "the same object" never causes the same statement to see two different states of that object's data mid-operation, the way Worked Example G.3.2's UnguardedCopyBuffer did. Some implementations may still include an explicit `this == &other` fast path purely to skip redundant work on self-assignment (a performance choice, not a correctness requirement) — but the underlying safety guarantee comes from the allocate-before-free ordering itself, which is also exactly the single-line fix Question 7 identified as the difference between a safe copy and a genuine use-after-free.
