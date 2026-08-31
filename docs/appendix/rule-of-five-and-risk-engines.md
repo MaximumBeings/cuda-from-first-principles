@@ -11,6 +11,8 @@
 - How to verify Rule-of-Five behavior for device memory honestly in a sandbox with no GPU, where every `cudaMalloc` call fails and every pointer is null — by switching from comparing addresses (which would trivially and misleadingly show everything "equal") to counting API calls (evidence that survives every allocation failing).
 - Why the self-assignment and self-move guards in every copy/move assignment operator above actually matter — tested, not just written, by removing each guard in turn and observing two genuinely different failure modes (silent data corruption from copying uninitialized memory onto itself, and silent data loss from one assignment's own statements overwriting each other), neither of which AddressSanitizer's heap checks catch.
 - The Rule of Zero — wrapping an owned resource in something that already manages itself correctly (`std::vector` in place of a raw `new[]`'d array) so the compiler's default special members become safe again, with zero hand-written members, exactly as they already were for `Point2D`.
+- Copy-and-swap — the technique that makes self-assignment safety and exception safety fall out of one mechanism, verified against Section G.3's own free-then-allocate ordering by genuinely injecting an allocation failure into both: the naive version is left holding a pointer to already-freed memory (an ASan-confirmed heap-use-after-free just from reading it back), while the copy-and-swap version comes back completely unchanged.
+- Why every move constructor and move assignment operator in this appendix is marked `noexcept` — demonstrated by putting two otherwise-identical structs in a `std::vector` and triggering reallocation: the non-`noexcept` one is silently relocated by copying, the `noexcept` one by moving, with no compiler diagnostic marking the difference either way.
 - Value-at-Risk and its variants — simulated/historical, parametric (variance-covariance), and Conditional VaR/Expected Shortfall — computed on the same GBM machinery Chapter 22.4 already established, with the CVaR ≥ VaR invariant checked genuinely rather than assumed.
 - XVA and its variants — CVA, DVA, and FVA — built from a genuine exposure profile (`EE(t)`/`ENE(t)`) extracted from checkpointed Monte Carlo paths of a forward contract, cross-checked against the closed-form GBM mean, plus honest scope notes on MVA/KVA and on wrong-way risk.
 
@@ -373,6 +375,164 @@ Every property Section G.3.1 spent five hand-written functions establishing — 
 This does not make Section G.3's hand-written version pointless — Section G.4's `GPUPathBuffer` genuinely cannot use this trick, because there is no `std::vector`-equivalent standard container for `cudaMalloc`'d device memory to delegate to (a hand-rolled thin RAII wrapper around `cudaMalloc`/`cudaFree` would itself need exactly Section G.4's five members, just written once and reused). The Rule of Zero and the Rule of Five are not competitors — the Rule of Zero is what the Rule of Five is *for*: writing the five correctly, once, inside whatever wrapper type a codebase reuses, so that everything built on top of it gets to follow the Rule of Zero instead.
 
 > `[COMMON TRAP]` It's tempting to read the Rule of Zero as "you never need the Rule of Five." Someone has to write the five correctly at least once — `std::vector`'s own implementation is not exempt from Section G.3's reasoning, it simply already did the work Section G.3 did by hand. A codebase with no resource-owning type more primitive than `std::vector`/`std::unique_ptr` can follow the Rule of Zero everywhere; a codebase that talks to `cudaMalloc` directly, the way Section G.4 does, needs at least one hand-written Rule of Five at the boundary.
+
+### Worked Example G.3.4 — Copy-and-swap: self-assignment safety and exception safety, together
+
+Worked Solution 8 named the technique real implementations use instead of an explicit `this == &other` check: build the new state fully before releasing the old one. **Copy-and-swap** is that technique made concrete, and it solves a second problem Section G.3's hand-written version never addressed at all — what happens when the *allocation itself* fails partway through an assignment.
+
+Section G.3's copy assignment operator frees the old resource, THEN allocates the new one:
+
+```cpp
+RiskPathBuffer& operator=(const RiskPathBuffer& other) {
+    if (this == &other) return *this;
+    delete[] paths;                          // old resource freed FIRST
+    count = other.count;
+    paths = new float[count];                // if THIS throws, paths is now DANGLING
+    std::memcpy(paths, other.paths, count * sizeof(float));
+    return *this;
+}
+```
+
+If `new` throws partway through — genuinely possible under memory pressure, not a contrived scenario — `paths` is left pointing at memory that was already freed one line earlier, and the object is now broken for the rest of its life. This section injects that exact failure, on purpose, using a one-shot fault-injecting allocator:
+
+```cpp
+bool g_should_throw = false;
+float* fault_new_float_array(int n) {
+    if (g_should_throw) { g_should_throw = false; throw std::bad_alloc(); }
+    return new float[n];
+}
+```
+
+```cpp
+UnsafeBuffer a(5);
+UnsafeBuffer b(3);
+g_should_throw = true;
+try {
+    a = b;   // throws INSIDE operator=, AFTER a's old buffer was already freed
+} catch (const std::bad_alloc&) { /* ... */ }
+printf("a.paths[0] = %f\n", a.paths[0]);   // reading from `a` now
+```
+
+Genuinely compiled with `g++ -Wall -Wextra -fsanitize=address -g` and run:
+
+```
+--- UnsafeBuffer: what happens when allocation fails MID-assignment ---
+caught std::bad_alloc from a = b, as expected
+attempting to read a.paths[0] now (a's old buffer was already freed
+before the throw, and nothing valid replaced it):
+```
+
+```
+==1593==ERROR: AddressSanitizer: heap-use-after-free on address 0x503000000040 ...
+READ of size 4 at 0x503000000040 thread T0
+    #0 ... main /tmp/cuda_appendix_g/09_copy_and_swap.cpp:105
+freed by thread T0 here:
+    #1 ... UnsafeBuffer::operator=(UnsafeBuffer const&) /tmp/cuda_appendix_g/09_copy_and_swap.cpp:40
+```
+
+The exception is caught cleanly — but `a` itself is now permanently broken, to the point that simply *reading* `a.paths[0]` afterward is a genuine, ASan-confirmed heap-use-after-free. Catching the exception did not save the object.
+
+Copy-and-swap fixes this by building the entire new state inside a **by-value parameter**, and only exchanging it into `*this` — via a `swap` that cannot itself fail — once construction has fully succeeded:
+
+```cpp
+struct SafeBuffer {
+    float* paths;
+    int count;
+
+    friend void swap(SafeBuffer& a, SafeBuffer& b) noexcept {
+        std::swap(a.paths, b.paths);
+        std::swap(a.count, b.count);
+    }
+
+    SafeBuffer(const SafeBuffer& other) : count(other.count) {
+        paths = fault_new_float_array(count);
+        std::memcpy(paths, other.paths, count * sizeof(float));
+    }
+    SafeBuffer(SafeBuffer&& other) noexcept : paths(nullptr), count(0) {
+        swap(*this, other);
+    }
+
+    // ONE function handles BOTH copy assignment and move assignment: an
+    // lvalue argument invokes the copy constructor to build `other`
+    // (allocating); an rvalue argument invokes the move constructor
+    // (just swapping pointers, no allocation) -- ordinary overload
+    // resolution picks the right one.
+    SafeBuffer& operator=(SafeBuffer other) {
+        swap(*this, other);
+        return *this;
+    }   // `other` (now holding *this's OLD resource) is destroyed HERE
+};
+```
+
+The identical injected failure, against `SafeBuffer` instead:
+
+```
+=== SafeBuffer (copy-and-swap): SAME injected failure, DIFFERENT outcome ===
+
+a BEFORE the failed assignment: count=5, paths=[0.0 1.0 2.0 3.0 4.0]
+caught std::bad_alloc from a = b, as expected
+a AFTER the failed assignment : count=5, paths=[0.0 1.0 2.0 3.0 4.0]
+```
+
+`a` is completely unchanged — not merely "not crashed," but provably holding the exact same five values it started with. The exception happens while constructing the by-value parameter `other` (inside `SafeBuffer`'s copy constructor), which is *before* `operator=`'s own body — the `swap` — ever runs; `*this` is never touched until `other` is fully built. This is the **strong exception guarantee**: either the operation completes entirely, or it has no visible effect at all.
+
+The same `SafeBuffer` run also confirms copy-and-swap's other property — one function, dispatching to copy or move automatically:
+
+```
+--- ONE operator=, dispatching to copy OR move via ordinary overload resolution ---
+c = d  (lvalue):        allocations 4 -> 5 (copy-constructing `other` allocated)
+e = std::move(f) (rvalue): allocations 7 -> 7 (move-constructing `other` allocated nothing)
+```
+
+`c = d` (an lvalue) allocates, because building `other` from `d` calls the copy constructor; `e = std::move(f)` (an rvalue) allocates nothing, because building `other` from `std::move(f)` calls the move constructor instead — the identical `operator=(SafeBuffer other)` handled both, with no separate copy-assignment and move-assignment overloads ever written, and no self-assignment guard either: for `a = a`, `other` would be a freshly-allocated deep copy of `a`'s own data, and `swap` would exchange it in — safe, if not a complete no-op the way Section G.3's guarded version is.
+
+> `[COMMON TRAP]` It's tempting to treat copy-and-swap as a strict upgrade with no cost. It does cost something Section G.3's guarded version avoids for the true self-assignment case: `a = a` under copy-and-swap still performs a full allocation and copy (to build `other`) before swapping, where Section G.3's `if (this == &other) return *this;` makes self-assignment a complete no-op. Copy-and-swap trades that one narrow optimization for a correctness guarantee — self-assignment safety AND exception safety, together, from one mechanism — that generalizes to failures Section G.3's guard was never designed to handle at all.
+
+### Worked Example G.3.5 — Why the move members need `noexcept`
+
+Every move constructor and move assignment operator in this appendix — `RiskPathBuffer`'s, `GPUPathBuffer`'s, `SafeBuffer`'s — is marked `noexcept`. The reason is `std::vector`. When a `std::vector<T>` needs to grow beyond its current capacity, it must relocate every existing element into new, larger storage — and to preserve its own strong exception guarantee (if relocation fails partway, the vector must still be left in its original, valid state), it uses `std::move_if_noexcept` internally: an existing element is moved into the new storage *only if* `T`'s move constructor is `noexcept` (or `T` has no accessible copy constructor at all); otherwise, `std::vector` silently falls back to *copying* every element instead, since a copy leaves the original untouched if it fails, while a throwing move could leave the vector holding neither the old state nor the new one.
+
+```cpp
+struct MoveThrowingBuffer {
+    int id;
+    static int copy_ctor_calls;
+    static int move_ctor_calls;
+    MoveThrowingBuffer(const MoveThrowingBuffer& other) : id(other.id) { copy_ctor_calls++; }
+    MoveThrowingBuffer(MoveThrowingBuffer&& other) : id(other.id) { move_ctor_calls++; }   // NOT noexcept
+};
+
+struct MoveNoexceptBuffer {
+    int id;
+    static int copy_ctor_calls;
+    static int move_ctor_calls;
+    MoveNoexceptBuffer(const MoveNoexceptBuffer& other) : id(other.id) { copy_ctor_calls++; }
+    MoveNoexceptBuffer(MoveNoexceptBuffer&& other) noexcept : id(other.id) { move_ctor_calls++; }   // noexcept
+};
+```
+
+Genuinely compiled with `g++ -Wall -Wextra` and run — both structs' move constructors are otherwise byte-for-byte identical:
+
+```
+--- MoveThrowingBuffer: move ctor exists, but is NOT noexcept ---
+after filling to capacity (2): copy_ctor_calls=0, move_ctor_calls=0
+after emplace_back(3) forces reallocation:
+  copy_ctor_calls=2, move_ctor_calls=0
+  (the 2 EXISTING elements were relocated by COPY, not move, specifically
+  because the move constructor is not noexcept)
+
+--- MoveNoexceptBuffer: IDENTICAL move constructor, ONLY difference: noexcept ---
+after filling to capacity (2): copy_ctor_calls=0, move_ctor_calls=0
+after emplace_back(3) forces reallocation:
+  copy_ctor_calls=0, move_ctor_calls=2
+  (the 2 existing elements were relocated by MOVE this time -- the ONLY
+  difference between the two structs is the `noexcept` keyword)
+```
+
+`v1.reserve(2)` fixes each vector's initial capacity at exactly 2; the third `emplace_back` genuinely exceeds it, forcing a real reallocation, not a hypothetical one. For `MoveThrowingBuffer`, the two elements already in the vector are relocated by **copying** — `copy_ctor_calls` jumps from `0` to `2`, `move_ctor_calls` stays `0` — purely because the compiler cannot prove the move won't throw. For `MoveNoexceptBuffer`, with a move constructor identical in every way except the `noexcept` keyword, the same reallocation relocates both elements by **moving** instead — `move_ctor_calls` jumps to `2`, `copy_ctor_calls` stays `0`. Nothing else about the two structs differs.
+
+Had `RiskPathBuffer`'s own move constructor (Section G.3.1) been left without `noexcept`, putting `RiskPathBuffer` objects into a `std::vector` and triggering growth would silently deep-copy every existing element on every reallocation instead of cheaply stealing their pointers — no compile error, no warning, just quietly worse performance that compounds with every element the vector ever holds.
+
+> `[COMMON TRAP]` It's tempting to assume a missing `noexcept` on a move constructor is purely a documentation nicety. `std::move_if_noexcept`'s behavior, demonstrated genuinely above, means it's a measurable performance decision the compiler makes FOR you, silently, based on that one keyword — with no diagnostic pointing at the cause if you never went looking for it.
 
 ## G.4 The Rule of Five for Device Memory: `GPUPathBuffer` `[FOUNDATIONAL]`
 
@@ -1146,6 +1306,226 @@ int main() {
 }
 ```
 
+### File: `09_copy_and_swap.cpp` (Worked Example G.3.4)
+
+```cpp
+#include <cstdio>
+#include <cstring>
+#include <utility>
+#include <stdexcept>
+#include <new>
+
+bool g_should_throw = false;
+float* fault_new_float_array(int n) {
+    if (g_should_throw) {
+        g_should_throw = false;
+        throw std::bad_alloc();
+    }
+    return new float[n];
+}
+
+struct UnsafeBuffer {
+    float* paths;
+    int count;
+
+    UnsafeBuffer(int n) : count(n) {
+        paths = fault_new_float_array(n);
+        for (int i = 0; i < n; i++) paths[i] = (float)i;
+    }
+    ~UnsafeBuffer() { delete[] paths; }
+
+    UnsafeBuffer(const UnsafeBuffer& other) : count(other.count) {
+        paths = fault_new_float_array(count);
+        std::memcpy(paths, other.paths, count * sizeof(float));
+    }
+
+    UnsafeBuffer& operator=(const UnsafeBuffer& other) {
+        if (this == &other) return *this;
+        delete[] paths;
+        count = other.count;
+        paths = fault_new_float_array(count);
+        std::memcpy(paths, other.paths, count * sizeof(float));
+        return *this;
+    }
+};
+
+int main() {
+    printf("=== Copy-and-swap: self-assignment safety AND exception safety, together ===\n\n");
+
+    printf("--- UnsafeBuffer: what happens when allocation fails MID-assignment ---\n");
+    UnsafeBuffer a(5);
+    UnsafeBuffer b(3);
+    g_should_throw = true;
+    try {
+        a = b;
+        printf("(unreached -- the assignment should have thrown)\n");
+    } catch (const std::bad_alloc&) {
+        printf("caught std::bad_alloc from a = b, as expected\n");
+    }
+    printf("attempting to read a.paths[0] now (a's old buffer was already freed\n");
+    printf("before the throw, and nothing valid replaced it):\n");
+    fflush(stdout);
+    printf("a.paths[0] = %f\n", a.paths[0]);
+    printf("(unreached if ASan caught the read above)\n");
+
+    return 0;
+}
+```
+
+### File: `09b_copy_and_swap_safe.cpp` (Worked Example G.3.4)
+
+```cpp
+#include <cstdio>
+#include <cstring>
+#include <utility>
+#include <stdexcept>
+#include <new>
+
+bool g_should_throw = false;
+int g_alloc_count = 0;
+float* fault_new_float_array(int n) {
+    if (g_should_throw) {
+        g_should_throw = false;
+        throw std::bad_alloc();
+    }
+    g_alloc_count++;
+    return new float[n];
+}
+
+struct SafeBuffer {
+    float* paths;
+    int count;
+
+    friend void swap(SafeBuffer& a, SafeBuffer& b) noexcept {
+        std::swap(a.paths, b.paths);
+        std::swap(a.count, b.count);
+    }
+
+    SafeBuffer(int n) : count(n) {
+        paths = fault_new_float_array(n);
+        for (int i = 0; i < n; i++) paths[i] = (float)i;
+    }
+    ~SafeBuffer() { delete[] paths; }
+
+    SafeBuffer(const SafeBuffer& other) : count(other.count) {
+        paths = fault_new_float_array(count);
+        std::memcpy(paths, other.paths, count * sizeof(float));
+    }
+    SafeBuffer(SafeBuffer&& other) noexcept : paths(nullptr), count(0) {
+        swap(*this, other);
+    }
+
+    SafeBuffer& operator=(SafeBuffer other) {
+        swap(*this, other);
+        return *this;
+    }
+};
+
+static void print_buffer(const char* label, const SafeBuffer& buf) {
+    printf("%s: count=%d, paths=[", label, buf.count);
+    for (int i = 0; i < buf.count; i++) printf("%s%.1f", (i ? " " : ""), buf.paths[i]);
+    printf("]\n");
+}
+
+int main() {
+    printf("=== SafeBuffer (copy-and-swap): SAME injected failure, DIFFERENT outcome ===\n\n");
+
+    SafeBuffer a(5);
+    SafeBuffer b(3);
+    print_buffer("a BEFORE the failed assignment", a);
+
+    g_should_throw = true;
+    try {
+        a = b;
+        printf("(unreached -- the assignment should have thrown)\n");
+    } catch (const std::bad_alloc&) {
+        printf("caught std::bad_alloc from a = b, as expected\n");
+    }
+
+    print_buffer("a AFTER the failed assignment ", a);
+
+    printf("\n--- ONE operator=, dispatching to copy OR move via ordinary overload resolution ---\n");
+    SafeBuffer c(4);
+    SafeBuffer d(2);
+    int calls_before_copy = g_alloc_count;
+    c = d;
+    int calls_after_copy = g_alloc_count;
+    printf("c = d  (lvalue):        allocations %d -> %d (copy-constructing `other` allocated)\n",
+           calls_before_copy, calls_after_copy);
+
+    SafeBuffer e(6);
+    SafeBuffer f(9);
+    int calls_before_move = g_alloc_count;
+    e = std::move(f);
+    int calls_after_move = g_alloc_count;
+    printf("e = std::move(f) (rvalue): allocations %d -> %d (move-constructing `other` allocated nothing)\n",
+           calls_before_move, calls_after_move);
+
+    return 0;
+}
+```
+
+### File: `10_noexcept_vector_reallocation.cpp` (Worked Example G.3.5)
+
+```cpp
+#include <cstdio>
+#include <vector>
+
+struct MoveThrowingBuffer {
+    int id;
+    static int copy_ctor_calls;
+    static int move_ctor_calls;
+
+    explicit MoveThrowingBuffer(int i) : id(i) {}
+    MoveThrowingBuffer(const MoveThrowingBuffer& other) : id(other.id) { copy_ctor_calls++; }
+    MoveThrowingBuffer(MoveThrowingBuffer&& other) : id(other.id) { move_ctor_calls++; }
+};
+int MoveThrowingBuffer::copy_ctor_calls = 0;
+int MoveThrowingBuffer::move_ctor_calls = 0;
+
+struct MoveNoexceptBuffer {
+    int id;
+    static int copy_ctor_calls;
+    static int move_ctor_calls;
+
+    explicit MoveNoexceptBuffer(int i) : id(i) {}
+    MoveNoexceptBuffer(const MoveNoexceptBuffer& other) : id(other.id) { copy_ctor_calls++; }
+    MoveNoexceptBuffer(MoveNoexceptBuffer&& other) noexcept : id(other.id) { move_ctor_calls++; }
+};
+int MoveNoexceptBuffer::copy_ctor_calls = 0;
+int MoveNoexceptBuffer::move_ctor_calls = 0;
+
+int main() {
+    printf("=== Why the Rule of Five's move members need `noexcept` ===\n\n");
+
+    printf("--- MoveThrowingBuffer: move ctor exists, but is NOT noexcept ---\n");
+    std::vector<MoveThrowingBuffer> v1;
+    v1.reserve(2);
+    v1.emplace_back(1);
+    v1.emplace_back(2);
+    printf("after filling to capacity (2): copy_ctor_calls=%d, move_ctor_calls=%d\n",
+           MoveThrowingBuffer::copy_ctor_calls, MoveThrowingBuffer::move_ctor_calls);
+    v1.emplace_back(3);
+    printf("after emplace_back(3) forces reallocation:\n");
+    printf("  copy_ctor_calls=%d, move_ctor_calls=%d\n",
+           MoveThrowingBuffer::copy_ctor_calls, MoveThrowingBuffer::move_ctor_calls);
+
+    printf("\n--- MoveNoexceptBuffer: IDENTICAL move constructor, ONLY difference: noexcept ---\n");
+    std::vector<MoveNoexceptBuffer> v2;
+    v2.reserve(2);
+    v2.emplace_back(1);
+    v2.emplace_back(2);
+    printf("after filling to capacity (2): copy_ctor_calls=%d, move_ctor_calls=%d\n",
+           MoveNoexceptBuffer::copy_ctor_calls, MoveNoexceptBuffer::move_ctor_calls);
+    v2.emplace_back(3);
+    printf("after emplace_back(3) forces reallocation:\n");
+    printf("  copy_ctor_calls=%d, move_ctor_calls=%d\n",
+           MoveNoexceptBuffer::copy_ctor_calls, MoveNoexceptBuffer::move_ctor_calls);
+
+    return 0;
+}
+```
+
 ### File: `05_var_engine.cpp` (Section G.5)
 
 ```cpp
@@ -1382,11 +1762,11 @@ int main() {
 
 ### Expected Output
 
-Each file's genuine output is embedded inline in its own section above (G.1–G.6). All nine files compile cleanly — `01_point2d_kernel.cu` and `04_gpu_buffer_rule_of_five.cu` with `nvcc -arch=sm_80`, the other seven with `g++ -std=c++17 -Wall -Wextra` (`02`, `03`, `07`, and `07b` additionally with `-fsanitize=address -g`) — with zero warnings across all nine, except `07_self_assignment_self_move.cpp` and `07b_unguarded_self_move.cpp` each producing their own single, expected `-Wself-move` warning on their deliberate `std::move`-onto-itself lines, discussed inline in Worked Example G.3.2 rather than suppressed.
+Each file's genuine output is embedded inline in its own section above (G.1–G.6). All twelve files compile cleanly — `01_point2d_kernel.cu` and `04_gpu_buffer_rule_of_five.cu` with `nvcc -arch=sm_80`, the other ten with `g++ -std=c++17 -Wall -Wextra` (`02`, `03`, `07`, `07b`, `09`, and `09b` additionally with `-fsanitize=address -g`) — with zero warnings across all twelve, except `07_self_assignment_self_move.cpp` and `07b_unguarded_self_move.cpp` each producing their own single, expected `-Wself-move` warning on their deliberate `std::move`-onto-itself lines, discussed inline in Worked Example G.3.2 rather than suppressed.
 
 ## Chapter Summary
 
-`Point2D`'s compiler-generated copy constructor is safe for exactly one reason: it owns nothing beyond the two `float`s it directly contains, so copying those two numbers twice produces two fully independent, correct objects — demonstrated in Section G.1 both on the host and by constructing `Point2D` objects directly inside a `__global__` kernel using its existing `__host__ __device__` methods, unchanged. The moment a struct owns a resource instead — Section G.2's `RiskPathBuffer`, wrapping a `new[]`'d array — the identical compiler-generated copy stops being safe, copying a pointer instead of the memory it addresses, and genuinely triggers a `heap-use-after-free` under AddressSanitizer the instant the first copy's destructor runs. The Rule of Five fixes this by making all five special members explicit: Section G.3 implements destructor, copy constructor, copy assignment, move constructor, and move assignment for the same struct, each one genuinely exercised and independently checked — deep-copy independence, a stolen-and-nulled moved-from pointer, a freed old resource before a new one is taken on. Section G.4 applies the identical pattern to a `cudaMalloc`'d device buffer, with one structural difference that is a direct consequence of what the struct owns rather than a stylistic choice: `cudaMalloc`/`cudaFree` are host-only Runtime API entry points, so `GPUPathBuffer`'s special members cannot be `__host__ __device__` — and, with no GPU in this sandbox to produce real distinct pointer addresses, verification shifts honestly from address comparison to counting `cudaMalloc` calls, evidence that survives every allocation failing, with every one of the five members — including copy assignment, and including self-assignment/self-move — now genuinely exercised. Section G.3's own self-assignment and self-move guards get the same scrutiny in Worked Example G.3.2: removing them doesn't reproduce Section G.2's crash, but produces two different, quieter failures instead — silent corruption from copying a brand-new uninitialized allocation onto itself, and silent data loss from one assignment's own two statements overwriting each other — neither one anything AddressSanitizer's heap checks would catch. Worked Example G.3.3 then shows the Rule of Five is not the only way out: wrapping the owned resource in `std::vector` instead of a raw pointer restores `Point2D`'s original situation — zero hand-written special members, all five (and the two self-assignment guards) correct by construction — the Rule of Zero this book's own `Point2D` example embodied from the very first section without naming it. The same discipline extends into quantitative finance: Section G.5 computes Value-at-Risk two genuinely different ways — a simulated/historical quantile extraction and a closed-form parametric estimate — from the same GBM-simulated data Chapter 22.4 established, landing close but not identical for a specific, checked reason (arithmetic P&L on a log-normal terminal price is only approximately normal), with Conditional VaR's `CVaR ≥ VaR` invariant verified rather than assumed. Section G.6 extends that same machinery to record an exposure profile across time rather than only at maturity, computing CVA, DVA, and FVA from genuine `EE(t)`/`ENE(t)` values cross-checked against the GBM process's own closed-form mean, with honest scope notes that MVA and KVA are named but not computed, since this appendix has no initial-margin schedule or capital profile to model them from, and that the CVA figure itself assumes exposure and counterparty default are independent — real wrong-way risk, where the two are correlated, would make the true CVA larger than what this flat-hazard model reports.
+`Point2D`'s compiler-generated copy constructor is safe for exactly one reason: it owns nothing beyond the two `float`s it directly contains, so copying those two numbers twice produces two fully independent, correct objects — demonstrated in Section G.1 both on the host and by constructing `Point2D` objects directly inside a `__global__` kernel using its existing `__host__ __device__` methods, unchanged. The moment a struct owns a resource instead — Section G.2's `RiskPathBuffer`, wrapping a `new[]`'d array — the identical compiler-generated copy stops being safe, copying a pointer instead of the memory it addresses, and genuinely triggers a `heap-use-after-free` under AddressSanitizer the instant the first copy's destructor runs. The Rule of Five fixes this by making all five special members explicit: Section G.3 implements destructor, copy constructor, copy assignment, move constructor, and move assignment for the same struct, each one genuinely exercised and independently checked — deep-copy independence, a stolen-and-nulled moved-from pointer, a freed old resource before a new one is taken on. Section G.4 applies the identical pattern to a `cudaMalloc`'d device buffer, with one structural difference that is a direct consequence of what the struct owns rather than a stylistic choice: `cudaMalloc`/`cudaFree` are host-only Runtime API entry points, so `GPUPathBuffer`'s special members cannot be `__host__ __device__` — and, with no GPU in this sandbox to produce real distinct pointer addresses, verification shifts honestly from address comparison to counting `cudaMalloc` calls, evidence that survives every allocation failing, with every one of the five members — including copy assignment, and including self-assignment/self-move — now genuinely exercised. Section G.3's own self-assignment and self-move guards get the same scrutiny in Worked Example G.3.2: removing them doesn't reproduce Section G.2's crash, but produces two different, quieter failures instead — silent corruption from copying a brand-new uninitialized allocation onto itself, and silent data loss from one assignment's own two statements overwriting each other — neither one anything AddressSanitizer's heap checks would catch. Worked Example G.3.3 then shows the Rule of Five is not the only way out: wrapping the owned resource in `std::vector` instead of a raw pointer restores `Point2D`'s original situation — zero hand-written special members, all five (and the two self-assignment guards) correct by construction — the Rule of Zero this book's own `Point2D` example embodied from the very first section without naming it. Worked Example G.3.4 closes a second gap Section G.3's hand-written version left open: a genuinely injected allocation failure leaves the free-then-allocate version holding a pointer to already-freed memory (an ASan-confirmed heap-use-after-free just from reading it back afterward), while the copy-and-swap alternative — build the new state fully inside a by-value parameter, then swap it in via an operation that cannot itself fail — comes back from the identical failure completely unchanged, and, as a bonus, collapses copy assignment and move assignment into one function that dispatches between them via ordinary overload resolution. Worked Example G.3.5 explains the one keyword every move member in this appendix carries: `noexcept`, demonstrated by putting two otherwise byte-identical structs into a `std::vector` and forcing reallocation — the non-`noexcept` one is silently relocated by copying every element, the `noexcept` one by moving them, a real, measurable, and otherwise undiagnosed performance difference traced to `std::move_if_noexcept`. The same discipline extends into quantitative finance: Section G.5 computes Value-at-Risk two genuinely different ways — a simulated/historical quantile extraction and a closed-form parametric estimate — from the same GBM-simulated data Chapter 22.4 established, landing close but not identical for a specific, checked reason (arithmetic P&L on a log-normal terminal price is only approximately normal), with Conditional VaR's `CVaR ≥ VaR` invariant verified rather than assumed. Section G.6 extends that same machinery to record an exposure profile across time rather than only at maturity, computing CVA, DVA, and FVA from genuine `EE(t)`/`ENE(t)` values cross-checked against the GBM process's own closed-form mean, with honest scope notes that MVA and KVA are named but not computed, since this appendix has no initial-margin schedule or capital profile to model them from, and that the CVA figure itself assumes exposure and counterparty default are independent — real wrong-way risk, where the two are correlated, would make the true CVA larger than what this flat-hazard model reports.
 
 ## Self-Check Questions
 
@@ -1398,6 +1778,8 @@ Each file's genuine output is embedded inline in its own section above (G.1–G.
 6. Section G.6's exposure profile shows `EE(t)` growing from 4.3690 at `t=0.25` to 9.6584 at `t=1.00`, roughly proportional to `sqrt(t)` rather than growing linearly with `t`. Using what you know about GBM's volatility term (`sigma * sqrt(dt)` in the update step), explain why an at-the-money forward's expected positive exposure would be expected to grow with the SQUARE ROOT of time rather than linearly.
 7. Worked Example G.3.2's `UnguardedCopyBuffer` was expected, going in, to reproduce Section G.2's heap-use-after-free — but genuinely didn't. Explain, using the exact order of statements in its `operator=`, why `other.paths` had already stopped pointing at the freed memory by the time `memcpy` read it — and what SPECIFIC single-line reordering (moving one statement earlier or later, without adding a guard) would make it into a genuine use-after-free instead.
 8. Worked Example G.3.3's `RiskPathBufferV2` gets correct self-assignment behavior (`e = e` leaves `e` unchanged) without writing any guard at all, while Section G.3's `RiskPathBuffer` needs an explicit `if (this == &other) return *this;` to get the same guarantee. Both structs ultimately bottom out in a `new[]`/`delete[]`-based allocation somewhere. Where does `std::vector`'s OWN internal implementation actually solve this problem — does it avoid the issue entirely, or does it just contain the same kind of guard Section G.3 wrote by hand, hidden one layer down?
+9. Worked Example G.3.4's `SafeBuffer::operator=(SafeBuffer other)` takes its parameter BY VALUE rather than by `const&` (the signature Section G.3's `RiskPathBuffer::operator=` uses). Explain why passing by value is not an incidental style choice here but the specific mechanism that makes copy-and-swap dispatch to either the copy constructor or the move constructor automatically — what would break about that dispatch if the parameter were changed to `const SafeBuffer&`?
+10. Worked Example G.3.5 shows `MoveThrowingBuffer` being copied instead of moved during `std::vector` reallocation, purely because its move constructor lacks `noexcept`. Both `MoveThrowingBuffer` and `MoveNoexceptBuffer` have accessible copy constructors in this appendix's example. The text mentions `std::move_if_noexcept` also allows a move when a type has "no accessible copy constructor at all," even without `noexcept`. Explain why that specific exception is safe for `std::vector`'s strong exception guarantee, using the same reasoning Worked Example G.3.4 used to explain why a THROWING move would be unsafe there.
 
 ## Where We Go Next
 
@@ -1420,3 +1802,7 @@ This appendix closes a loop this book opened with `Point2D` in its main chapters
 **7.** The four statements run in this order: `delete[] paths;` frees the old buffer; `count = other.count;` copies an `int`, unaffected by anything freed; `paths = new float[count];` allocates a brand-new buffer and assigns its address into `paths` — and since `other` and `*this` are the same object for `x = x`, this line *also* just changed the value of `other.paths`, because it's the identical variable. Only after that does `memcpy(paths, other.paths, ...)` run, by which point `other.paths` already holds the *new* allocation's address, not the freed one — so the copy reads uninitialized memory, not freed memory. The single-line reordering that WOULD produce a genuine use-after-free: move the `memcpy(...)` call to run *before* `paths = new float[count];`, i.e., swap those two statements. With that swap, at the moment `memcpy` runs, `paths` (and `other.paths`, same variable) still holds the pointer `delete[]` just freed one line earlier — `memcpy(paths, other.paths, ...)` would then read from AND write to that already-freed address, a genuine, ASan-catchable heap-use-after-free on both sides of the copy at once.
 
 **8.** It depends on which specific standard library implementation you read, since the C++ standard requires only that self-assignment leave a `std::vector` unchanged, not any particular technique for guaranteeing it — but the technique real implementations generally favor avoids the issue structurally rather than checking for it explicitly. Instead of Section G.3's order (free the old resource, THEN allocate and copy the new one), a self-assignment-safe copy assignment builds the new state FIRST — allocate fresh storage, copy every element into it — and only releases the OLD storage after the new one is fully and successfully built. Under that ordering, `e = e` never has a moment where `e`'s data has been destroyed before it's been read, because reading happens entirely before anything is freed; no identity check is needed because the two objects being "the same object" never causes the same statement to see two different states of that object's data mid-operation, the way Worked Example G.3.2's UnguardedCopyBuffer did. Some implementations may still include an explicit `this == &other` fast path purely to skip redundant work on self-assignment (a performance choice, not a correctness requirement) — but the underlying safety guarantee comes from the allocate-before-free ordering itself, which is also exactly the single-line fix Question 7 identified as the difference between a safe copy and a genuine use-after-free.
+
+**9.** With `SafeBuffer& operator=(const SafeBuffer& other)`, the body `swap(*this, other)` would not compile at all: `swap` takes both arguments by mutable reference (`swap(SafeBuffer& a, SafeBuffer& b)`), and a `const SafeBuffer&` cannot bind to a non-`const` reference parameter. Passing by value is what makes copy-and-swap work at all, for two reasons at once. First, it's what supplies a genuinely swappable, mutable local object — `other` — regardless of whether the caller's argument was an lvalue or an rvalue. Second, and this is the dispatch mechanism itself: constructing that local `other` from the function's actual argument is exactly where overload resolution happens — an lvalue argument (`c = d`) selects `SafeBuffer`'s copy constructor to build `other`, an rvalue argument (`e = std::move(f)`) selects the move constructor instead — and this selection happens automatically, via the same overload-resolution rules that pick any constructor, without `operator=`'s own body needing to know or care which one ran. A `const SafeBuffer&` parameter would still be aliasing the CALLER's actual object, meaning `swap(*this, other)` — if it somehow compiled — would mutate the caller's own variable as a side effect of assignment, which is not what `c = d` is supposed to do to `d`.
+
+**10.** A type with no accessible copy constructor at all is **move-only** — copying it isn't merely undesirable, it's not an operation that exists. Worked Example G.3.4's reasoning for why `std::vector` prefers copy over a possibly-throwing move is that copying leaves the ORIGINAL element untouched if it fails, so the vector can still recover to its pre-reallocation state; but that reasoning only matters as a choice between two available options. For a move-only type, there is no second option — `std::move_if_noexcept` selecting move here isn't a claim that the move is safe, it's a recognition that moving is the *only* mechanically possible way to relocate the element at all, throwing or not. This is, honestly, a real, known gap in the strong-exception-guarantee story: `std::vector`'s reallocation genuinely cannot promise the same recovery-on-failure behavior for a move-only type with a throwing move constructor that it can for a copyable type — the standard's guarantee is correspondingly weaker in that specific corner, not because it was overlooked, but because no alternative to a possibly-throwing move exists to fall back to.
