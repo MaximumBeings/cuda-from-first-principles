@@ -95,6 +95,7 @@ nav:
       - "D. C++ Functional and Lambda Programming": appendix/functional-lambda-programming.md
       - "E. The SM as a Pipeline and the Tiling Payoff": appendix/sm-pipeline-tiling.md
       - "F. C++ Lambda Functions, From First Principles": appendix/cpp-lambda-functions.md
+      - "G. The Rule of Five, and a Risk Engine to Exercise It": appendix/rule-of-five-and-risk-engines.md
 
 extra:
   social:
