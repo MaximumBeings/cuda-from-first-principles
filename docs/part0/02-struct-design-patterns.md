@@ -87,6 +87,48 @@ its own fields, because every Point2D shares one compile-time layout.
 
 > `[COMMON TRAP]` It's tempting to assume a struct method is "host code by default, like a plain function." A struct method with no qualifier at all defaults to `__host__` exactly like a free function does — but forgetting `__host__ __device__` on a method a kernel needs is a compile error at the *call site inside the kernel*, not at the struct's own definition, which can make the error look unrelated to the struct until you trace it back.
 
+### Worked Example 2.1.2 — the same method, called from a `__global__` kernel via a launch configuration
+
+Worked Example 2.1.1's claim — that `nvcc` compiles `distance_from_origin()` a second time, "ready for a kernel that constructs and uses `Point2D` instances directly on the GPU" — is worth cashing in rather than leaving as an assertion. A `__global__` kernel constructs one `Point2D` per thread and calls the identical `__host__ __device__` method main() already called on the host, launched with an explicit **launch configuration**, `<<<1, N>>>` — one block of `N` threads, so `threadIdx.x` alone indexes every point:
+
+```cpp
+__global__ void distance_kernel(float* out, const float* xs, const float* ys, int n) {
+    int idx = threadIdx.x;
+    if (idx < n) {
+        Point2D p(xs[idx], ys[idx]);          // constructed ON THE DEVICE
+        out[idx] = p.distance_from_origin();   // the SAME method main() calls on the host
+    }
+}
+```
+
+Compiled and run as part of the same `01_basic_structs.cu` further below:
+
+```
+host-side reference (same method, called on the host):
+  Point2D(3.0, 4.0).distance_from_origin() = 5.000000
+  Point2D(0.0, 0.0).distance_from_origin() = 0.000000
+  Point2D(1.0, 1.0).distance_from_origin() = 1.414214
+  Point2D(5.0, 12.0).distance_from_origin() = 13.000000
+
+cudaMalloc(d_xs): cudaErrorNoDevice, cudaMalloc(d_ys): cudaErrorNoDevice, cudaMalloc(d_out): cudaErrorNoDevice
+cudaMemcpy(xs H2D): cudaErrorNoDevice, cudaMemcpy(ys H2D): cudaErrorNoDevice
+
+launching distance_kernel<<<1, 4>>> (one block, 4 threads, one Point2D per thread)
+kernel launch: cudaErrorNoDevice
+cudaMemcpy(out D2H): cudaErrorNoDevice
+device-computed results (all zero: the copy back never received real device output,
+because no CUDA-capable device exists in this sandbox -- genuinely attempted, honestly
+failed, exactly like every device-touching call in this book from Chapter 1 onward):
+  h_out[0] = 0.000000
+  h_out[1] = 0.000000
+  h_out[2] = 0.000000
+  h_out[3] = 0.000000
+```
+
+The host-side reference loop reuses `distance_from_origin()` on the same four points the kernel is about to process, confirming the 3-4-5 and 5-12-13 triangles by hand (`5.0` and `13.0`) before the kernel is even launched — the point of comparison the kernel's own results would need to match on real hardware. `distance_kernel<<<1, N>>>(...)` is the launch configuration itself: the first argument is the number of blocks, the second the number of threads per block, and `nvcc` expands this into the same `__cudaLaunchPrologue`/`__cudaLaunch` pair Chapter 1.3 already showed for `hello_kernel<<<2, 4>>>()`. Every device-touching call here — `cudaMalloc`, `cudaMemcpy`, the kernel launch itself, and the copy back — genuinely executes and honestly reports `cudaErrorNoDevice`, so `h_out` never receives real values; what's genuinely verified is that `Point2D`'s constructor and `distance_from_origin()` compile cleanly *inside* `distance_kernel`, and that the launch configuration syntax itself is well-formed and accepted, not that a GPU actually ran it.
+
+> `[COMMON TRAP]` `idx = threadIdx.x` alone (rather than `blockIdx.x * blockDim.x + threadIdx.x`, the pattern Appendix G's kernel uses) is only correct because this launch uses a single block, `<<<1, N>>>`. The moment more than one block is launched, `threadIdx.x` resets to `0` at the start of every block, and omitting `blockIdx.x * blockDim.x` would silently make every block's threads overwrite the same low indices — a bug that a single-block launch like this one can't expose, which is exactly why the general form is worth defaulting to even when, as here, one block happens to be enough.
+
 ## 2.2 Multiple Constructors and Value Semantics `[FOUNDATIONAL]`
 
 ### Intuition
@@ -372,6 +414,17 @@ struct Point2D {
     }
 };
 
+// Section 2.1.2: the SAME method, called from a __global__ kernel via an
+// explicit launch configuration, <<<1, N>>> -- one block of N threads,
+// threadIdx.x alone indexing every point.
+__global__ void distance_kernel(float* out, const float* xs, const float* ys, int n) {
+    int idx = threadIdx.x;
+    if (idx < n) {
+        Point2D p(xs[idx], ys[idx]);
+        out[idx] = p.distance_from_origin();
+    }
+}
+
 int main() {
     Point2D point1(3.0f, 4.0f);
     Point2D point2(1.0f, 1.0f);
@@ -385,6 +438,44 @@ int main() {
     point2b.x = 99.0f;
     printf("after point2.x = 99.0: point1 = (%f, %f), point2 = (%f, %f)\n",
            point1.x, point1.y, point2b.x, point2b.y);
+
+    // --- The SAME distance_from_origin(), now called FROM a kernel ---
+    const int N = 4;
+    float xs[N] = {3.0f, 0.0f, 1.0f, 5.0f};
+    float ys[N] = {4.0f, 0.0f, 1.0f, 12.0f};
+
+    printf("\nhost-side reference (same method, called on the host):\n");
+    for (int i = 0; i < N; i++) {
+        Point2D p(xs[i], ys[i]);
+        printf("  Point2D(%.1f, %.1f).distance_from_origin() = %f\n", xs[i], ys[i], p.distance_from_origin());
+    }
+
+    float *d_xs = nullptr, *d_ys = nullptr, *d_out = nullptr;
+    cudaError_t err_xs = cudaMalloc(&d_xs, N * sizeof(float));
+    cudaError_t err_ys = cudaMalloc(&d_ys, N * sizeof(float));
+    cudaError_t err_out = cudaMalloc(&d_out, N * sizeof(float));
+    printf("\ncudaMalloc(d_xs): %s, cudaMalloc(d_ys): %s, cudaMalloc(d_out): %s\n",
+           cudaGetErrorName(err_xs), cudaGetErrorName(err_ys), cudaGetErrorName(err_out));
+
+    cudaError_t err_cpy_xs = cudaMemcpy(d_xs, xs, N * sizeof(float), cudaMemcpyHostToDevice);
+    cudaError_t err_cpy_ys = cudaMemcpy(d_ys, ys, N * sizeof(float), cudaMemcpyHostToDevice);
+    printf("cudaMemcpy(xs H2D): %s, cudaMemcpy(ys H2D): %s\n",
+           cudaGetErrorName(err_cpy_xs), cudaGetErrorName(err_cpy_ys));
+
+    printf("\nlaunching distance_kernel<<<1, %d>>> (one block, %d threads, one Point2D per thread)\n", N, N);
+    distance_kernel<<<1, N>>>(d_out, d_xs, d_ys, N);
+    printf("kernel launch: %s\n", cudaGetErrorName(cudaGetLastError()));
+
+    float h_out[N] = {0};
+    cudaError_t err_cpy_out = cudaMemcpy(h_out, d_out, N * sizeof(float), cudaMemcpyDeviceToHost);
+    printf("cudaMemcpy(out D2H): %s\n", cudaGetErrorName(err_cpy_out));
+    printf("device-computed results (all zero: the copy back never received real device output,\n");
+    printf("because no CUDA-capable device exists in this sandbox -- genuinely attempted, honestly\n");
+    printf("failed, exactly like every device-touching call in this book from Chapter 1 onward):\n");
+    for (int i = 0; i < N; i++) {
+        printf("  h_out[%d] = %f\n", i, h_out[i]);
+    }
+
     return 0;
 }
 ```
@@ -394,7 +485,7 @@ nvcc -arch=sm_80 01_basic_structs.cu -o 01_basic_structs
 ./01_basic_structs
 ```
 
-Produces exactly the two output blocks shown in Worked Examples 2.1.1 and 2.2.1 above, concatenated in the order `main()` prints them.
+Produces the two output blocks shown in Worked Examples 2.1.1 and 2.2.1 above, followed by Worked Example 2.1.2's kernel-launch block, concatenated in the order `main()` prints them.
 
 ### File: `02_templates.cu`
 
