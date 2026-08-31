@@ -30,6 +30,27 @@ Pricing one bond is one exponential. Pricing a portfolio of a thousand of them i
 
 Aggregating a portfolio into a total value is the tree-reduction pattern established earlier in this book, applied to present value instead of a loss — and this section's own genuinely-reproduced bug is exactly what happens when that pattern's `while current_size > 1` requirement gets skipped.
 
+### Formulas and Key Terms
+
+```
+PV = FV · e^(-yield · t)
+```
+
+- **Face value (FV)** — also called *principal* or *notional* for a zero-coupon bond: the fixed dollar amount paid to the bondholder at maturity, with nothing paid before then.
+- **Yield** — the annualized, continuously-compounded rate of return an investor requires to hold the bond; in this chapter's bonds, `yield = risk_free_rate + credit_spread`.
+- **Time to maturity (t)** — years remaining until the bond pays its face value.
+- **Discount factor** — `DF(t) = e^(-yield·t)`, the multiplier that converts one dollar received at time `t` into its equivalent value today; `PV = FV · DF(t)` is the same formula written as "face value times discount factor."
+- **Risk-free rate** — the yield demanded for a promise assumed certain to be honored (this section's `risk_free_rate` field).
+- **Credit spread** — the extra yield demanded above the risk-free rate to compensate for the chance the promise isn't kept (this section's `credit_spread` field).
+- **Basis point (bp)** — one hundredth of one percent, `0.0001` in decimal yield terms — the standard unit for quoting small yield changes.
+- **DV01** ("dollar value of a basis point") — the bond's price change for a one-basis-point move in its own yield:
+
+  ```
+  DV01 = -(dPV/dyield) × 0.0001
+  ```
+
+  For this chapter's continuously-compounded zero-coupon bonds, the derivative has a closed form — `dPV/dyield = -t · PV` — so `DV01 = t · PV × 0.0001` exactly, precisely the quantity Worked Example 22.1.2 gets from `backward()` instead of a second pricing run.
+
 ### File: 01_bond_pricing_soa.cu
 
 ```cpp
@@ -331,6 +352,26 @@ A *risky* bond's price is a sum of several discounted cash flows, each one bent 
 
 This is the identical bond and the identical bisection algorithm Chapter 21.1 differentiated through — computed here in double precision throughout, for the identical reason that file needed it: a solver converging to `TOLERANCE=1e-8` genuinely needs more precision than float32's roughly seven significant digits can carry through a hundred-odd arithmetic operations without the final digits drifting.
 
+### Formulas and Key Terms
+
+```
+PV = Σ (i=1..N) C · e^(-(r+s)·t_i)  +  FV · e^(-(r+s)·t_N)
+```
+
+- **Coupon (C)** — the periodic interest payment a bond makes before maturity, in dollars per period; a zero-coupon bond (Section 22.1) is the special case `C = 0`.
+- **Coupon rate** — `C` expressed as a percentage of face value per year (e.g. a \$1,000 bond paying \$30/year has a 3% coupon rate).
+- **Cash flow times (t_i)** — the years, from today, at which each coupon (and, at `t_N`, the face value) is paid.
+- **Market price** — the price the bond actually trades at, taken here as a given, observed number rather than something this section computes.
+- **Z-spread (s)** — the single constant spread that, added to every point on the risk-free curve, makes the bond's discounted cash flows equal its market price:
+
+  ```
+  market_price = Σ (i=1..N) C · e^(-(r+s)·t_i)  +  FV · e^(-(r+s)·t_N)     [solve for s]
+  ```
+
+  Unlike Section 22.1's yield, `s` cannot be isolated algebraically once `N > 1`, which is exactly why this section solves for it numerically instead.
+- **Bisection** — the search this section uses to find `s`: maintain a bracket `[lo, hi]` known to contain the answer; at each step, price the bond at the midpoint spread `mid = (lo + hi) / 2`. Since a bond's price falls as its spread rises, a mid-priced bond worth *more* than the market price means the true spread is *higher* than `mid` (`lo = mid`), and worth *less* means the true spread is *lower* (`hi = mid`); repeat until `hi - lo` is below a chosen tolerance.
+- **Convergence tolerance** — the bracket width, `TOLERANCE = 1e-8` in this section's solver, below which the search stops and `mid` is accepted as the answer.
+
 ### File: 02_zspread_bisection.cu
 
 ```cpp
@@ -492,6 +533,24 @@ Think of a seesaw with several weights placed at different distances from the ce
 
 Portfolio weight is a bond's share of total value; portfolio duration is the weighted average of individual durations — the same weight-times-distance-summed-together idea as the seesaw, computed as one elementwise multiply followed by the same sum-reduction used to total portfolio value in Section 22.1.
 
+### Formulas and Key Terms
+
+```
+w_i = PV_i / Σ_j PV_j
+
+D_portfolio = Σ_i w_i · D_i
+```
+
+- **Present-value weight (w_i)** — bond `i`'s share of the portfolio's total value; every valid set of weights sums to exactly `1.0`, the cheap correctness check this section's own COMMON TRAP relies on.
+- **Duration (D_i)** — a single bond's price sensitivity to its own yield, expressed in years. For this chapter's continuously-compounded zero-coupon bonds, duration and time to maturity coincide exactly: `D_i = -(1/PV_i)(dPV_i/dyield_i) = t_i`, which is why Worked Examples 22.3.1 and 22.3.2 use each bond's maturity directly as its duration.
+- **Macaulay duration** — formally, the weighted-average time (in years) of a bond's cash flows, weighted by each cash flow's present-value share; for a zero-coupon bond there is only one cash flow, so Macaulay duration is trivially just `t`.
+- **Modified duration** — the percentage price sensitivity `-(1/PV)(dPV/dyield)`, related to Macaulay duration by a discounting adjustment that, under continuous compounding, disappears entirely — the specific reason `D_i = t_i` exactly in this chapter rather than merely approximately.
+- **Portfolio DV01** — Section 22.1's single-bond DV01, extended to the whole book:
+
+  ```
+  Portfolio DV01 = D_portfolio · (Σ_j PV_j) × 0.0001
+  ```
+
 ### File: 03_portfolio_duration.cu
 
 ```cpp
@@ -645,6 +704,29 @@ Ask one friend to guess how a coin flip sequence will go, and you learn nothing 
 | Greeks | Differentiate the formula once, by hand | `backward()` through the whole simulation, once, for every Greek at once |
 
 This section's file below genuinely simulates 200,000 independent geometric Brownian motion paths, each one an embarrassingly-parallel `__global__` thread exactly like Section 22.1's bond portfolio, using the same Box-Muller normal-sampling technique from Chapter 20.1. It then genuinely measures the COMMON TRAP below as an actual noise comparison, not a claim: pricing the same call option five separate times with a bumped starting price, once using a fresh, unrelated random seed for each bumped run and once reusing the identical underlying random draws (differing only in `s0`), and comparing the standard deviation of the resulting "Greek" across the five repeats.
+
+### Formulas and Key Terms
+
+```
+dS_t = μ·S_t·dt + σ·S_t·dW_t                                     (continuous-time GBM)
+
+S_(t+dt) = S_t · exp( (μ - σ²/2)·dt + σ·√dt·Z ),   Z ~ N(0,1)     (this section's discretized update)
+
+Z = √(-2·ln(U1)) · cos(2π·U2),   U1, U2 ~ Uniform(0,1)            (Box-Muller)
+
+Price = e^(-r·T) · (1/N)·Σ_i payoff(S_T^(i))                      (Monte Carlo price)
+```
+
+- **Drift (μ)** — the underlying's expected rate of return; this section sets `μ = 0.03`, equal to the risk-free rate `r`, which is what makes this a **risk-neutral** simulation (the measure under which every asset's expected return is the risk-free rate — the standard convention for pricing derivatives by discounted expectation).
+- **Volatility (σ)** — the annualized standard deviation of the underlying's returns; `σ = 0.20` throughout this section's examples.
+- **Wiener process / Brownian motion (W_t)** — the continuous-time random process whose increments `dW_t` are normally distributed with mean `0` and variance `dt`; `σ·√dt·Z` in the discretized update is exactly one such increment, scaled by volatility.
+- **Box-Muller transform** — turns two independent uniform draws into one standard normal draw, reused verbatim from Chapter 20.1 (formula above).
+- **Terminal price (S_T)** — the simulated underlying price at maturity `T`, one per simulated path.
+- **Strike (K)** — the fixed price at which an option's payoff is evaluated.
+- **Call payoff** — `max(S_T - K, 0)`; **put payoff** — `max(K - S_T, 0)`.
+- **Monte Carlo price** — the discounted average payoff across all simulated paths (formula above).
+- **Greeks** — an option's price sensitivities to its inputs (delta to `S_0`, vega to `σ`, and so on); this section's `backward()` pass produces all of them from one simulation, in contrast to bump-and-reprice's one finite-difference estimate per Greek per re-simulation.
+- **Common random numbers (CRN)** — a variance-reduction technique: reusing the identical underlying random draws across two scenarios that differ only in one input (here, `s0` versus `s0 + bump`), so noise from the random draws themselves cancels out of the difference instead of compounding into it.
 
 ### File: 04_monte_carlo_gbm.cu
 
