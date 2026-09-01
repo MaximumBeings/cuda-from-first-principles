@@ -652,6 +652,24 @@ This section reuses Chapter 22.4's `box_muller`/xorshift-PRNG/GBM-update machine
 
 **Conditional VaR (CVaR / Expected Shortfall)** is the average of the P&L values *beyond* the VaR cutoff — not just the one point at the boundary, but the full tail. CVaR is always at least as large as VaR by construction: it averages a set of losses every one of which is at least as large as the VaR loss itself, since that's the criterion for a loss belonging to the tail at all.
 
+### Formulas and Key Terms
+
+```
+VaR_α = -PnL_(⌊α·N⌋)                          (simulated/historical VaR, PnL sorted ascending)
+
+VaR_α = S0 · σ_Δt · z_α,    σ_Δt = σ·√Δt       (parametric / variance-covariance VaR)
+
+CVaR_α = -(1/k) · Σ_(i=1)^k PnL_(i),   k = ⌊α·N⌋   (Conditional VaR / Expected Shortfall)
+```
+
+- **P&L (profit and loss)** — the change in position value over the horizon; `PnL = S_T - S0` in this section, one value per simulated scenario.
+- **Confidence level** — the tail probability VaR is measured against; `99%` confidence corresponds to `α = 0.01`, the loss expected to be exceeded only 1% of the time.
+- **z_α** — the standard normal critical value at tail probability `α`; `z_0.01 = 2.326348` for 99% confidence, the value `z_99` in the code above.
+- **Horizon (Δt)** — the holding period over which the loss is measured; `Δt = 1/252` (one trading day) throughout this section.
+- **σ_Δt** — volatility rescaled to the horizon via the square-root-of-time rule: `σ_Δt = σ·√Δt`, `sigma_1day` in the code above.
+- **Tail quantile / worst-case index** — the sorted-P&L position VaR is read from, `⌊α·N⌋` for `N` total scenarios — `var_index` in the code above.
+- **Expected Shortfall (ES)** — another name for Conditional VaR: the average loss *conditional on* already being in the tail, rather than the single boundary value VaR reports.
+
 ### Worked Example G.5.1 — Both methodologies, cross-checked
 
 ```cpp
@@ -718,6 +736,31 @@ An exposure profile requires simulating a path's value at multiple checkpoints, 
 - **CVA** (Credit Valuation Adjustment) is the expected loss from counterparty default: `CVA = (1-R_C) * Σᵢ EE(tᵢ) * [Q_C(tᵢ₋₁) - Q_C(tᵢ)] * DF(tᵢ)`, where `Q_C(t) = exp(-λ_C·t)` is the counterparty's survival probability under a flat hazard rate `λ_C`, `R_C` its recovery rate, and `DF(t) = exp(-r·t)` the risk-free discount factor.
 - **DVA** (Debit Valuation Adjustment) is the mirror using the bank's *own* hazard rate and `ENE`: `DVA = (1-R_B) * Σᵢ |ENE(tᵢ)| * [Q_B(tᵢ₋₁) - Q_B(tᵢ)] * DF(tᵢ)` — an expected *gain* to the bank's own valuation, since the bank's own default would extinguish an obligation it owed.
 - **FVA** (Funding Valuation Adjustment) is the cost of funding expected positive exposure at a spread over the risk-free rate: `FVA = Σᵢ s_funding * EE(tᵢ) * DF(tᵢ) * Δtᵢ`.
+
+### Formulas and Key Terms
+
+```
+V(t) = S(t) - K                                             (forward contract value, long position)
+
+EE(t)  = E[max(V(t), 0)]                                    (Expected Positive Exposure)
+ENE(t) = E[min(V(t), 0)]                                    (Expected Negative Exposure)
+
+Q(t)  = e^(-λ·t)                                             (survival probability, flat hazard rate λ)
+DF(t) = e^(-r·t)                                             (risk-free discount factor)
+
+CVA = (1-R_C) · Σ_i EE(t_i) · [Q_C(t_(i-1)) - Q_C(t_i)] · DF(t_i)
+DVA = (1-R_B) · Σ_i |ENE(t_i)| · [Q_B(t_(i-1)) - Q_B(t_i)] · DF(t_i)
+FVA = Σ_i s_funding · EE(t_i) · DF(t_i) · Δt_i
+```
+
+- **Forward contract** — an agreement to buy the underlying at a fixed strike `K` at maturity; a long position's value at any earlier time `t` is `V(t) = S(t) - K`.
+- **Exposure** — how much would be lost right now if the counterparty defaulted this instant; `EE(t)` and `ENE(t)` are its two one-sided halves.
+- **Hazard rate (λ)** — the instantaneous default intensity: the (constant, under this appendix's flat-hazard model) rate at which default risk accrues per unit time. `λ_C` for the counterparty, `λ_B` for the bank's own credit.
+- **Survival probability (Q(t))** — the probability of *not* having defaulted by time `t`; `Q(t) = e^(-λ·t)` under a flat hazard rate, so `Q(t_(i-1)) - Q(t_i)` is the probability of defaulting specifically *within* interval `i`.
+- **Recovery rate (R)** — the fraction of exposure recovered in the event of default; `1 - R` is the *loss given default*, the multiplier on `EE`/`ENE` in the CVA/DVA formulas above.
+- **Discount factor (DF(t))** — converts a cash flow at time `t` into its present value: `DF(t) = e^(-r·t)`, using the risk-free rate `r`.
+- **Funding spread (s_funding)** — the spread over the risk-free rate a bank pays to fund a position; the multiplier on `EE(t)` in the FVA formula, since positive exposure must be funded.
+- **CVA / DVA / FVA** — see Background above for what each one means; the formulas here are the same three equations, restated together for reference alongside the terms they're built from.
 
 ### Worked Example G.6.1 — A genuine exposure profile, and CVA/DVA/FVA from it
 
