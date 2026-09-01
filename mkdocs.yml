@@ -96,6 +96,8 @@ nav:
       - "E. The SM as a Pipeline and the Tiling Payoff": appendix/sm-pipeline-tiling.md
       - "F. C++ Lambda Functions, From First Principles": appendix/cpp-lambda-functions.md
       - "G. The Rule of Five, and a Risk Engine to Exercise It": appendix/rule-of-five-and-risk-engines.md
+      - "H. Tensor Contractions, From First Principles (CPU)": appendix/tensor-contractions-cpu.md
+      - "I. Tensor Contractions, From First Principles (GPU)": appendix/tensor-contractions-gpu.md
 
 extra:
   social:
